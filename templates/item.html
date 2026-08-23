@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_card.html" import product_card, buy_button %}
+{% block title %}{{ product.title }}のレビュー | {{ site.title }}{% endblock %}
+{% block description %}{{ product.summary }}{% endblock %}
+{% block canonical %}{{ product.url }}{% endblock %}
+{% block og_title %}{{ product.title }}のレビュー{% endblock %}
+{% block og_description %}{{ product.summary }}{% endblock %}
+{% block head %}
+<script type="application/ld+json">
+{{ {
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": product.title,
+  "brand": product.brand,
+  "description": product.summary,
+  "url": product.url
+} | tojson }}
+</script>
+{% endblock %}
+{% block content %}
+<article class="item">
+  <p class="crumbs"><a href="{{ base }}/">ホーム</a> / <a href="{{ base }}/categories/{{ slugify(product.category) }}/">{{ product.category }}</a></p>
+  <h1>{{ product.title }}</h1>
+  <p class="lede">{{ product.summary }}</p>
+
+  <div class="item-head">
+    <div class="item-thumb">
+      {% if product.image %}<img src="{{ product.image }}" alt="{{ product.title }}">
+      {% else %}<span class="thumb-placeholder">{{ product.category }}</span>{% endif %}
+    </div>
+    <dl class="spec">
+      <dt>ブランド</dt><dd>{{ product.brand }}</dd>
+      {% if site.price_display == 'exact' and product.price_exact %}
+      <dt>価格</dt><dd>{{ product.price_exact }}<span class="note">（{{ product.price_fetched_at[:16] | replace('T', ' ') }} 時点。変動するため販売ページの表示が優先されます）</span></dd>
+      {% elif product.price_range and site.price_display != 'none' %}
+      <dt>価格帯</dt><dd>{{ product.price_range }}<span class="note">（記事作成時点の目安）</span></dd>
+      {% endif %}
+      {% if product.availability %}<dt>在庫</dt><dd>{{ product.availability }}</dd>{% endif %}
+      {% if product.best_for %}<dt>向いている人</dt><dd>{{ product.best_for }}</dd>{% endif %}
+      {% if product.tags %}<dt>タグ</dt><dd>{{ product.tags | join(' / ') }}</dd>{% endif %}
+    </dl>
+  </div>
+
+  {{ buy_button(product) }}
+
+  <h2>良かった点</h2>
+  <ul class="pros">{% for x in product.pros %}<li>{{ x }}</li>{% endfor %}</ul>
+
+  {% if product.cons %}
+  <h2>気になった点</h2>
+  <ul class="cons">{% for x in product.cons %}<li>{{ x }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if product.features %}
+  <h2>主な仕様</h2>
+  <ul class="features">{% for f in product.features %}<li>{{ f }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if product.review_html %}
+  <h2>レビュー</h2>
+  <div class="prose">{{ product.review_html | safe }}</div>
+  {% endif %}
+
+  {{ buy_button(product, 'Amazonで価格を確認する') }}
+
+  {% if in_roundups %}
+  <h2>この商品を紹介しているまとめ</h2>
+  <ul class="roundup-list">
+    {% for r in in_roundups %}<li><a href="{{ base }}{{ r.path }}">{{ r.title }}</a></li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if related %}
+  <h2>同じカテゴリの商品</h2>
+  <div class="grid">{% for p in related %}{{ product_card(p) }}{% endfor %}</div>
+  {% endif %}
+</article>
+{% endblock %}

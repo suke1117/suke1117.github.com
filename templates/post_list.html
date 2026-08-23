@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}記事一覧 | {{ site.title }}{% endblock %}
+{% block canonical %}{{ site_root }}/posts/{% endblock %}
+{% block content %}
+<h1>記事一覧</h1>
+{% if posts %}
+<ul class="post-list">
+  {% for p in posts %}<li><a href="{{ base }}{{ p.path }}">{{ p.title }}</a><span class="meta">{{ p.date }}</span></li>{% endfor %}
+</ul>
+{% else %}
+<p>まだ記事がありません。<code>content/posts/</code> に Markdown を追加すると、ここに並びます。</p>
+{% endif %}
+{% endblock %}

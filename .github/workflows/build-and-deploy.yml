@@ -1,0 +1,79 @@
+name: サイトのビルドと公開
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data/**"
+      - "content/**"
+      - "templates/**"
+      - "static/**"
+      - "scripts/**"
+      - ".github/workflows/build-and-deploy.yml"
+  schedule:
+    # 毎日 09:00 JST（= 00:00 UTC）に再ビルド。
+    # PA-API のキーがあれば商品情報も更新される。
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 更新した amazon_cache.json をコミットするため
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # secrets は step の if で直接参照できないため、env 経由で判定する
+    env:
+      HAS_PA_API: ${{ secrets.AMAZON_ACCESS_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 商品情報を更新（PA-APIのキーがある場合のみ）
+        if: env.HAS_PA_API == 'true'
+        env:
+          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+        run: python scripts/fetch_products.py --refresh
+
+      - name: 更新分をコミット
+        if: env.HAS_PA_API == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/amazon_cache.json
+          git diff --staged --quiet || git commit -m "chore: 商品情報を更新 [skip ci]"
+          git push
+
+      - name: サイトを生成
+        env:
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+        run: python scripts/build_site.py --out public
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

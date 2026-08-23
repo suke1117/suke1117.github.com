@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }} | {{ site.title }}{% endblock %}
+{% block description %}{{ post.summary | default(site.description) }}{% endblock %}
+{% block canonical %}{{ site_root }}{{ post.path }}{% endblock %}
+{% block og_title %}{{ post.title }}{% endblock %}
+{% block content %}
+<article class="post">
+  <h1>{{ post.title }}</h1>
+  <p class="meta">{{ post.date }}</p>
+  <div class="prose">{{ post.body_html | safe }}</div>
+</article>
+{% endblock %}

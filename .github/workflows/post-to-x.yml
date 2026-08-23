@@ -1,0 +1,59 @@
+name: Xへの自動投稿
+
+on:
+  schedule:
+    # 08:00 / 12:00 / 19:00 / 22:00 JST（UTCではその-9時間）
+    # Xの無料プランは月500投稿までなので、1日4回程度が上限の目安。
+    - cron: "0 23 * * *"
+    - cron: "0 3 * * *"
+    - cron: "0 10 * * *"
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "投稿せず文面だけ確認する"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # 投稿履歴(data/state/x_posted.json)をコミットするため
+
+concurrency:
+  group: post-to-x
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 投稿
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/post_to_x.py --dry-run
+          else
+            python scripts/post_to_x.py
+          fi
+
+      - name: 投稿履歴をコミット
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/state/x_posted.json
+          git diff --staged --quiet || git commit -m "chore: X投稿履歴を更新 [skip ci]"
+          git push

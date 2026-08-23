@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────
+# X 自動投稿の設定
+# ─────────────────────────────────────────────
+
+# 1回の実行で投稿する件数
+posts_per_run: 1
+
+# 同じ商品を再投稿するまでの最短日数
+# （Amazon/X ともに「同一文面の連投」を嫌うので、必ず日数を空ける）
+min_repost_interval_days: 7
+
+# 投稿リンクの向き先
+#   site   … 自サイトの記事URL（推奨。アソシエイト審査前でも運用でき、サイトへの流入も作れる）
+#   amazon … Amazonのアフィリエイトリンク直貼り（associate_tag 設定後のみ）
+link_target: "site"
+
+# ステマ規制対応：広告であることを明示する文言。消さないこと。
+ad_label: "#PR"
+
+# 文面テンプレート
+# 使える変数: {title} {summary} {best_for} {price_range} {category} {pros1} {url} {ad_label}
+templates:
+  - |
+    {title}
+
+    {summary}
+
+    {pros1}
+
+    {url} {ad_label}
+  - |
+    【{category}】{title}
+
+    向いてる人：{best_for}
+    価格帯：{price_range}
+
+    {url} {ad_label}
+  - |
+    {summary}
+
+    → {title}
+    レビューはこちら
+    {url} {ad_label}
+
+# まとめ記事用のテンプレート
+# 使える変数: {title} {lead1} {count} {url} {ad_label}
+roundup_templates:
+  - |
+    {title}（{count}点）
+
+    {lead1}
+
+    {url} {ad_label}
+  - |
+    まとめ更新：{title}
+
+    {lead1}
+
+    {url} {ad_label}

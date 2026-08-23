@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ site.title }}{% endblock %}</title>
+<meta name="description" content="{% block description %}{{ site.description }}{% endblock %}">
+<link rel="canonical" href="{% block canonical %}{{ site_root }}/{% endblock %}">
+<link rel="alternate" type="application/rss+xml" title="{{ site.title }}" href="{{ base }}/feed.xml">
+<link rel="stylesheet" href="{{ base }}/static/style.css">
+<meta property="og:site_name" content="{{ site.title }}">
+<meta property="og:title" content="{% block og_title %}{{ site.title }}{% endblock %}">
+<meta property="og:description" content="{% block og_description %}{{ site.description }}{% endblock %}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="{{ base }}/">{{ site.title }}</a>
+    <p class="tagline">{{ site.tagline }}</p>
+    <nav>
+      {% for n in site.nav %}<a href="{{ base }}{{ n.path }}">{{ n.title }}</a>{% endfor %}
+    </nav>
+  </div>
+</header>
+
+<p class="disclosure-bar">{{ site.disclosure.short }}</p>
+
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p class="disclosure">{{ site.disclosure.long }}</p>
+    <nav>
+      <a href="{{ base }}/about/">このサイトについて</a>
+      <a href="{{ base }}/disclosure/">広告について</a>
+      <a href="{{ base }}/privacy/">プライバシーポリシー</a>
+      <a href="{{ base }}/feed.xml">RSS</a>
+    </nav>
+    <p class="copy">&copy; {{ now.year }} {{ site.author }}</p>
+  </div>
+</footer>
+</body>
+</html>

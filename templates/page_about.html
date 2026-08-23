@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}このサイトについて | {{ site.title }}{% endblock %}
+{% block canonical %}{{ site_root }}/about/{% endblock %}
+{% block content %}
+<article class="prose">
+<h1>このサイトについて</h1>
+<p>{{ site.title }}は、{{ site.author }}が実際に使ったもの・購入を検討したものについて、
+選んだ理由と気になった点をあわせて記録しているサイトです。</p>
+
+<h2>書き方の方針</h2>
+<ul>
+  <li>良い点だけでなく、気になった点も必ず書きます。</li>
+  <li>試していないものについては「試していない」と明記します。</li>
+  <li>価格は変動が激しいため、目安の価格帯のみを記載しています。正確な価格は各販売ページでご確認ください。</li>
+</ul>
+
+<h2>広告について</h2>
+<p>{{ site.disclosure.long }}詳しくは<a href="{{ base }}/disclosure/">広告について</a>をご覧ください。</p>
+
+<h2>お問い合わせ</h2>
+<p>記事内容の誤りのご指摘などは、運営者のSNSアカウントまでご連絡ください。</p>
+</article>
+{% endblock %}

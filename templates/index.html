@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_card.html" import product_card %}
+{% block content %}
+<section class="hero">
+  <h1>{{ site.title }}</h1>
+  <p>{{ site.description }}</p>
+</section>
+
+{% if roundups %}
+<section>
+  <h2>まとめ記事</h2>
+  <ul class="roundup-list">
+    {% for r in roundups %}
+    <li>
+      <a href="{{ base }}{{ r.path }}">{{ r.title }}</a>
+      <span class="meta">{{ r.count }}点 / 更新 {{ r.updated }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section>
+  <h2>商品レビュー</h2>
+  <div class="grid">
+    {% for p in products %}{{ product_card(p) }}{% endfor %}
+  </div>
+</section>
+
+<section>
+  <h2>カテゴリ</h2>
+  <ul class="tag-list">
+    {% for c, items in category_map.items() %}
+    <li><a href="{{ base }}/categories/{{ slugify(c) }}/">{{ c }}（{{ items | length }}）</a></li>
+    {% endfor %}
+  </ul>
+</section>
+
+{% if posts %}
+<section>
+  <h2>記事</h2>
+  <ul class="post-list">
+    {% for p in posts %}
+    <li><a href="{{ base }}{{ p.path }}">{{ p.title }}</a><span class="meta">{{ p.date }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}
