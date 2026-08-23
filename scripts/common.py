@@ -30,6 +30,11 @@ def load_site() -> dict:
     base = os.environ.get("SITE_BASE_URL")
     if base:
         site["base_url"] = base.rstrip("/")
+    # ローカルプレビュー用。base_path があるとサブディレクトリ配信前提のパスになり、
+    # 手元の http.server では CSS などが 404 になるため空にできるようにしておく
+    base_path = os.environ.get("SITE_BASE_PATH")
+    if base_path is not None:
+        site["base_path"] = base_path.rstrip("/")
     return site
 
 

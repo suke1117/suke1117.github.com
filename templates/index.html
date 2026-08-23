@@ -6,14 +6,14 @@
   <p>{{ site.description }}</p>
 </section>
 
-{% if roundups %}
+{% if comparisons %}
 <section>
-  <h2>まとめ記事</h2>
+  <h2>比較記事</h2>
   <ul class="roundup-list">
-    {% for r in roundups %}
+    {% for c in comparisons %}
     <li>
-      <a href="{{ base }}{{ r.path }}">{{ r.title }}</a>
-      <span class="meta">{{ r.count }}点 / 更新 {{ r.updated }}</span>
+      <a href="{{ base }}{{ c.path }}">{{ c.title }}</a>
+      <span class="meta">{{ c.count }}商品 / 更新 {{ c.updated }}</span>
     </li>
     {% endfor %}
   </ul>

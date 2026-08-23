@@ -38,6 +38,6 @@ price_display: "range"   # range | exact | none
 
 nav:
   - { title: "ホーム", path: "/" }
-  - { title: "まとめ", path: "/roundups/" }
+  - { title: "比較記事", path: "/compare/" }
   - { title: "記事", path: "/posts/" }
   - { title: "このサイトについて", path: "/about/" }

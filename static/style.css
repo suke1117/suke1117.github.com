@@ -117,3 +117,52 @@ th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; fon
 .site-footer .disclosure { font-size: .78rem; color: var(--muted); }
 .site-footer nav a { margin-right: 14px; font-size: .8rem; color: var(--muted); }
 .copy { font-size: .75rem; color: var(--muted); margin-top: 16px; }
+
+/* ── 比較記事 ───────────────────────────────── */
+.scene { font-size: 1.02rem; }
+.not-for { border: 1px solid var(--line); border-radius: 10px; padding: 4px 20px 16px; background: var(--card); }
+.not-for h2 { border: 0; font-size: 1rem; margin: 20px 0 8px; }
+.not-for ul { margin: 0; padding-left: 1.2em; font-size: .92rem; }
+
+.criterion { margin: 20px 0; }
+.criterion h3 { font-size: 1.02rem; }
+.criterion p { margin: 4px 0; }
+.check { font-size: .9rem; color: var(--muted); border-left: 3px solid var(--line); padding-left: 12px; }
+
+.table-scroll { overflow-x: auto; }
+.table-scroll table { min-width: 520px; }
+.table-scroll th[scope="row"] { font-weight: 600; }
+.table-scroll thead th { background: var(--card); white-space: nowrap; }
+
+.compare-items { list-style: none; padding: 0; counter-reset: ci; }
+.compare-item { border-top: 1px solid var(--line); padding: 28px 0; counter-increment: ci; }
+.compare-item h3 { font-size: 1.12rem; margin: 0 0 4px; }
+.compare-item h3::before { content: counter(ci) ". "; color: var(--muted); }
+.compare-item h3 a { text-decoration: none; }
+
+.fit { margin: 14px 0; font-size: .92rem; }
+.fit dt { color: var(--muted); font-size: .78rem; margin-top: 10px; }
+.fit dd { margin: 2px 0 0; }
+
+.own-note {
+  border-left: 3px solid var(--accent); background: var(--card);
+  padding: 10px 16px; margin: 16px 0; border-radius: 0 8px 8px 0;
+}
+.own-note-label {
+  display: inline-block; font-size: .72rem; font-weight: 700;
+  color: var(--accent); letter-spacing: .06em; margin-bottom: 2px;
+}
+.own-note p { margin: 2px 0; }
+
+.complaints dt { font-weight: 600; margin-top: 16px; }
+.complaints dd { margin: 4px 0 0; color: var(--muted); font-size: .94rem; }
+
+.situations .situation { border-top: 1px solid var(--line); padding: 18px 0; }
+.situations h3 { font-size: 1rem; margin-bottom: 4px; }
+.first-steps li { margin: 6px 0; }
+
+.related { border-top: 2px solid var(--line); margin-top: 48px; }
+.related-item { padding: 14px 0; }
+.next-trouble { font-weight: 600; margin: 0 0 4px; }
+.lead-in { font-size: .9rem; color: var(--muted); margin: 4px 0 0; }
+.pin-link { margin-top: 40px; font-size: .82rem; }

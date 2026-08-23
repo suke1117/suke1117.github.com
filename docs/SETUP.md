@@ -41,21 +41,31 @@ GitHub Pages の「ユーザーサイト」として `https://suke1117.github.io
 
 ```bash
 pip install -r requirements.txt
-python scripts/build_site.py
+python scripts/validate.py
+python scripts/build_site.py --local
 python -m http.server -d public 8000
 ```
+
+`--local` は手元確認用に `base_path` を外すオプションです。付けないと CSS が 404 になります
+（公開用のビルドでは付けません）。
 
 ### コンテンツを増やす
 
 Amazonアソシエイトの審査では**サイトに十分なオリジナル記事があること**が見られます。
 目安として、申請前に **10記事以上**は用意してください。
 
-- 商品レビュー → `data/products.yml` に追記（`scripts/new_item.py` が雛形を作ります）
-- まとめ記事 → `data/roundups.yml` に追記（商品のslugを並べるだけ）
-- 読み物 → `content/posts/*.md` に Markdown を追加
+記事の作り方は [docs/prompts/](prompts/) にまとめています。
 
-いずれも、**他サイトのコピーではない自分の文章**であることが重要です。
-`cons`（気になった点）を必ず書く構成にしているのは、独自性を担保するためです。
+1. [STEP1](prompts/01-genre-research.md) でジャンルを決める
+2. [STEP2](prompts/02-comparison-article.md) で比較記事のYAMLを生成し、`data/` に貼る
+3. `own_note`（実際に使って気づいた一言）を自分で書く
+4. [STEP4](prompts/03-related-articles.md) で記事どうしをつなぐ
+
+`scripts/validate.py` は、比較記事に載っている商品の `own_note` が空だと
+**エラーで公開を止めます**。生成された文章をそのまま出すサイトは、
+審査でも読者の信用でも不利になるためです。
+
+商品に紐づかない読み物は `content/posts/*.md` に Markdown で追加できます。
 
 ---
 
@@ -140,7 +150,7 @@ Xの無料プランは**月500投稿**（1日あたり約16件）です。
 
 `data/x_templates.yml` で調整します。
 
-- `templates` / `roundup_templates` … 文面。同じ商品には毎回違うテンプレートが当たります
+- `templates` / `comparison_templates` … 文面。同じ記事には毎回違うテンプレートが当たります
 - `min_repost_interval_days` … 同じ商品を再投稿するまでの日数（既定7日）
 - `link_target` … `site`（自サイト記事へ誘導）か `amazon`（アフィリンク直貼り）
 - `ad_label` … 広告表示。**消さないでください**
@@ -153,12 +163,20 @@ Xの無料プランは**月500投稿**（1日あたり約16件）です。
 
 | 頻度 | やること |
 | --- | --- |
-| 商品を買ったとき | `new_item.py` でレビューを1本足す |
-| 週1回 | まとめ記事を1本更新するか新規作成する |
+| 週1〜2本 | STEP2 のプロンプトで比較記事を作り、`own_note` を書いて公開する |
+| 記事を足すたび | STEP4 のプロンプトで、既存記事との回遊をつなぐ |
+| 月1回 | 生成された `/pin/*.png` を Pinterest に投稿する |
+| 月1回 | リンク切れ確認（Actions が自動で Issue を作ります） |
 | 自動 | 毎日のビルド、1日4回のX投稿 |
 
-自動化しているのは**配信と更新**の部分だけで、**評価の中身は自分で書く**設計です。
-中身まで自動生成すると、Amazonアソシエイトの審査・維持の両方でリスクになります。
+自動化しているのは**構成・生成・配信**で、**実際に使った一言だけは自分で書く**設計です。
+中身まで全部自動生成すると、Amazonアソシエイトの審査・維持の両方でリスクになります。
+
+### 数字の見方について
+
+元記事には月次の収益推移が載っていますが、あくまで一例です。
+検索順位がつくまでに数か月かかること、最初の1〜2か月はほぼ収益が出ないことは
+仕組みの側では変えられません。記事数と時間の両方が必要な手法です。
 
 ---
 
@@ -172,3 +190,5 @@ Xの無料プランは**月500投稿**（1日あたり約16件）です。
 | X API が 403 | アプリ権限が Read only。Read and Write に変更し、Access Token を再発行する |
 | 履歴のコミットで失敗する | Settings → Actions → Workflow permissions が `Read and write` か確認 |
 | PA-API が 429 | リクエスト過多。売上が少ないとレート制限が厳しいので、更新頻度を下げる |
+| ビルドが validate で止まる | エラー内容がそのまま出ます。多くは `own_note` の未記入です |
+| Pinterest画像が SVG のまま | ローカルに `rsvg-convert` が無いだけ。Actions 上では PNG も生成されます |

@@ -68,7 +68,7 @@ def tweet_length(text: str) -> int:
 def build_candidates(site: dict, config: dict) -> list[dict]:
     """商品とまとめ記事を、投稿候補の共通形式に整える。"""
     products = load_yaml("products.yml", []) or []
-    roundups = load_yaml("roundups.yml", []) or []
+    comparisons = load_yaml("comparisons.yml", []) or []
     link_target = config.get("link_target", "site")
     candidates: list[dict] = []
 
@@ -95,19 +95,23 @@ def build_candidates(site: dict, config: dict) -> list[dict]:
             },
         })
 
-    for r in roundups:
-        if r.get("no_post"):
+    for c in comparisons:
+        if c.get("no_post"):
             continue
-        link = url_for(site, f"/roundups/{r['slug']}/")
-        lead1 = (r.get("lead") or "").strip().splitlines()
+        link = url_for(site, f"/compare/{c['slug']}/")
+        scene1 = (c.get("scene") or "").strip().splitlines()
+        criteria = c.get("criteria") or []
         candidates.append({
-            "key": f"roundup:{r['slug']}",
-            "kind": "roundup",
+            "key": f"compare:{c['slug']}",
+            "kind": "comparison",
             "url": link,
             "vars": {
-                "title": r.get("title", ""),
-                "lead1": lead1[0] if lead1 else "",
-                "count": len(r.get("items", [])),
+                "title": c.get("title", ""),
+                "keyword": c.get("keyword", ""),
+                "scene1": scene1[0] if scene1 else "",
+                "criteria1": criteria[0].get("name", "") if criteria else "",
+                "not_for1": (c.get("not_for") or [""])[0],
+                "count": len(c.get("items", [])),
                 "url": link,
             },
         })
@@ -133,7 +137,9 @@ def pick(candidates: list[dict], state: dict, config: dict, count: int) -> list[
         c for c in candidates
         if c["key"] not in last_posted or now - last_posted[c["key"]] >= interval
     ]
-    eligible.sort(key=lambda c: last_posted.get(c["key"], dt.datetime.min.replace(tzinfo=dt.timezone.utc)))
+    # 未投稿どうしが並んだときは比較記事を先に出す（収益の主力がこちらのため）
+    never = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+    eligible.sort(key=lambda c: (last_posted.get(c["key"], never), 0 if c["kind"] == "comparison" else 1))
     for c in eligible:
         c["post_count"] = post_count.get(c["key"], 0)
     return eligible[:count]
@@ -141,7 +147,7 @@ def pick(candidates: list[dict], state: dict, config: dict, count: int) -> list[
 
 def compose(candidate: dict, config: dict) -> str:
     """テンプレートを1つ選んで文面を作る。同じ商品には毎回違うテンプレートが当たる。"""
-    key = "roundup_templates" if candidate["kind"] == "roundup" else "templates"
+    key = "comparison_templates" if candidate["kind"] == "comparison" else "templates"
     templates = config.get(key) or config.get("templates") or ["{title}\n{url}"]
     template = templates[candidate.get("post_count", 0) % len(templates)]
 

@@ -42,18 +42,30 @@ templates:
     レビューはこちら
     {url} {ad_label}
 
-# まとめ記事用のテンプレート
-# 使える変数: {title} {lead1} {count} {url} {ad_label}
-roundup_templates:
+# 比較記事用のテンプレート
+# 使える変数: {title} {keyword} {scene1} {criteria1} {not_for1} {count} {url} {ad_label}
+comparison_templates:
   - |
-    {title}（{count}点）
+    {title}
 
-    {lead1}
+    {scene1}
+
+    {count}商品を、実際のレビューの不満まで含めて比べました。
 
     {url} {ad_label}
   - |
-    まとめ更新：{title}
+    「{keyword}」で迷っている人向け。
 
-    {lead1}
+    選ぶときに見るのは「{criteria1}」から。
+    ここを外すと、値段に関係なく合いません。
+
+    {url} {ad_label}
+  - |
+    {title}
+
+    先に書いておくと、この記事が向いていないのは
+    ・{not_for1}
+
+    それ以外の人向けに{count}商品を比べています。
 
     {url} {ad_label}

@@ -3,9 +3,9 @@
 {% block title %}{{ category }}の記事 | {{ site.title }}{% endblock %}
 {% block content %}
 <h1>{{ category }}</h1>
-{% if roundups %}
+{% if comparisons %}
 <ul class="roundup-list">
-  {% for r in roundups %}<li><a href="{{ base }}{{ r.path }}">{{ r.title }}</a></li>{% endfor %}
+  {% for c in comparisons %}<li><a href="{{ base }}{{ c.path }}">{{ c.title }}</a></li>{% endfor %}
 </ul>
 {% endif %}
 <div class="grid">{% for p in products %}{{ product_card(p) }}{% endfor %}</div>

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}比較記事の一覧 | {{ site.title }}{% endblock %}
+{% block canonical %}{{ site_root }}/compare/{% endblock %}
+{% block content %}
+<h1>比較記事</h1>
+<ul class="roundup-list">
+  {% for c in comparisons %}
+  <li>
+    <a href="{{ base }}{{ c.path }}">{{ c.title }}</a>
+    <span class="meta">{{ c.count }}商品 / {{ c.updated }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

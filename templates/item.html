@@ -51,6 +51,11 @@
   <ul class="cons">{% for x in product.cons %}<li>{{ x }}</li>{% endfor %}</ul>
   {% endif %}
 
+  {% if product.own_note_html and '（' not in product.own_note %}
+  <h2>使ってみて</h2>
+  <div class="prose own-note">{{ product.own_note_html | safe }}</div>
+  {% endif %}
+
   {% if product.features %}
   <h2>主な仕様</h2>
   <ul class="features">{% for f in product.features %}<li>{{ f }}</li>{% endfor %}</ul>
@@ -63,10 +68,10 @@
 
   {{ buy_button(product, 'Amazonで価格を確認する') }}
 
-  {% if in_roundups %}
-  <h2>この商品を紹介しているまとめ</h2>
+  {% if in_comparisons %}
+  <h2>この商品を比べている記事</h2>
   <ul class="roundup-list">
-    {% for r in in_roundups %}<li><a href="{{ base }}{{ r.path }}">{{ r.title }}</a></li>{% endfor %}
+    {% for c in in_comparisons %}<li><a href="{{ base }}{{ c.path }}">{{ c.title }}</a></li>{% endfor %}
   </ul>
   {% endif %}
 

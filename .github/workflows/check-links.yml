@@ -1,0 +1,54 @@
+name: 商品リンクの生存確認
+
+on:
+  schedule:
+    # 毎月1日 10:00 JST（= 前日 01:00 UTC）
+    - cron: "0 1 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write   # 廃番を見つけたら Issue を立てる
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: リンクを確認
+        id: check
+        continue-on-error: true
+        env:
+          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+        run: python scripts/check_links.py | tee result.txt
+
+      - name: 要対応があれば Issue を立てる
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "商品リンクの生存確認で、対応が必要な商品が見つかりました。"
+            echo
+            echo '```'
+            cat result.txt
+            echo '```'
+            echo
+            echo "廃番になっている場合は、data/products.yml から該当商品を外すか、"
+            echo "後継モデルの ASIN に差し替えてください。"
+            echo "比較記事から外す場合は、data/comparisons.yml の items からも消してください。"
+          } > body.md
+          gh issue create \
+            --title "リンク切れの確認が必要な商品があります（$(date +%Y-%m)）" \
+            --body-file body.md \
+            --repo "${{ github.repository }}"
