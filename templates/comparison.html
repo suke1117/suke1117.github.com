@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_card.html" import buy_button %}
+{% from "_card.html" import buy_button, stance_badge, stance_block %}
 {% block title %}{{ comparison.title }} | {{ site.title }}{% endblock %}
 {% block description %}{{ comparison.scene | truncate(110, true, '…') }}{% endblock %}
 {% block canonical %}{{ comparison.url }}{% endblock %}
@@ -15,6 +15,23 @@
 
   {# 1. 読者がいま困っている場面 #}
   <div class="prose scene">{{ comparison.scene_html | safe }}</div>
+
+  {# この記事を何をもとに書いたか。使っていないなら、そう書いて先に出す #}
+  <section class="basis">
+    <h2>この記事の作り方</h2>
+    <p class="basis-summary">
+      {% if comparison.stance == 'owned' %}
+        比べた{{ comparison.count }}商品すべてを実際に使っています。
+      {% elif comparison.stance == 'mixed' %}
+        比べた{{ comparison.count }}商品のうち{{ comparison.owned_count }}商品を実際に使っています。
+        残りは仕様と購入者レビューをもとに比べています。
+      {% else %}
+        比べた{{ comparison.count }}商品は、いずれも実際には使っていません。
+        メーカー公開の仕様と、購入者レビューをもとに比べています。
+      {% endif %}
+    </p>
+    {% if comparison.basis_html %}<div class="prose">{{ comparison.basis_html | safe }}</div>{% endif %}
+  </section>
 
   {# 2. この記事が向いていない人（先に外す） #}
   {% if comparison.not_for %}
@@ -67,16 +84,14 @@
     <ol class="compare-items">
       {% for e in comparison.entries %}
       <li class="compare-item">
-        <h3><a href="{{ base }}{{ e.product.path }}">{{ e.product.title }}</a></h3>
+        <h3><a href="{{ base }}{{ e.product.path }}">{{ e.product.title }}</a> {{ stance_badge(e.product) }}</h3>
         <p class="card-cat">{{ e.product.price_range }}{% if e.product.specs %} / {{ e.product.specs.values() | join(' / ') }}{% endif %}</p>
         {% if e.comment %}<p class="comment">{{ e.comment }}</p>{% endif %}
         <dl class="fit">
           <dt>向いている人</dt><dd>{{ e.for_whom }}</dd>
           <dt>向いていない人</dt><dd>{{ e.not_for_whom }}</dd>
         </dl>
-        {% if e.product.own_note_html and '（' not in e.product.own_note %}
-        <div class="own-note"><span class="own-note-label">使ってみて</span>{{ e.product.own_note_html | safe }}</div>
-        {% endif %}
+        {{ stance_block(e.product) }}
         {{ buy_button(e.product) }}
         <p><a href="{{ base }}{{ e.product.path }}">この商品の詳細を読む →</a></p>
       </li>

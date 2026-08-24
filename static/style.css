@@ -166,3 +166,25 @@ th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; fon
 .next-trouble { font-weight: 600; margin: 0 0 4px; }
 .lead-in { font-size: .9rem; color: var(--muted); margin: 4px 0 0; }
 .pin-link { margin-top: 40px; font-size: .82rem; }
+
+/* ── 検証スタンス（実機を使ったかどうか）────────── */
+.badge {
+  display: inline-block; vertical-align: middle;
+  font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+.badge-owned { background: #166534; color: #fff; }
+.badge-researched { background: var(--card); color: var(--muted); border: 1px solid var(--line); }
+@media (prefers-color-scheme: dark) {
+  .badge-owned { background: #22c55e; color: #10240f; }
+}
+
+.basis { border: 1px solid var(--line); border-radius: 10px; padding: 4px 20px 12px; background: var(--card); margin: 24px 0; }
+.basis h2 { border: 0; font-size: .95rem; margin: 16px 0 6px; }
+.basis-summary { font-weight: 600; margin: 0 0 8px; }
+.basis .prose p { font-size: .92rem; color: var(--muted); margin: 6px 0; }
+
+.evidence {
+  font-size: .86rem; color: var(--muted);
+  border-left: 3px solid var(--line); padding-left: 12px; margin: 16px 0;
+}

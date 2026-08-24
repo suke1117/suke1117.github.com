@@ -21,3 +21,26 @@
 </p>
 {% endif %}
 {% endmacro %}
+
+{% macro stance_badge(p) %}
+{% if p.stance == 'owned' %}
+<span class="badge badge-owned">実機を使用</span>
+{% else %}
+<span class="badge badge-researched">実機未使用</span>
+{% endif %}
+{% endmacro %}
+
+{% macro stance_block(p) %}
+{% if p.stance == 'owned' and p.own_note_html %}
+<div class="own-note">
+  <span class="own-note-label">使ってみて</span>
+  {{ p.own_note_html | safe }}
+</div>
+{% elif p.stance != 'owned' %}
+<p class="evidence">
+  実機は使用していません。
+  {% if p.evidence.sources %}{{ p.evidence.sources | join('・') }}をもとに記載しています。{% endif %}
+  {% if p.evidence.review_count %}（レビュー{{ p.evidence.review_count }}件を確認{% if p.evidence.checked_at %} / {{ p.evidence.checked_at }}時点{% endif %}）{% endif %}
+</p>
+{% endif %}
+{% endmacro %}

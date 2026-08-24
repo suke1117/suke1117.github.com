@@ -123,6 +123,8 @@ def prepare_products(site: dict) -> dict[str, dict]:
         p.setdefault("pros", [])
         p.setdefault("cons", [])
         p.setdefault("specs", {})
+        p.setdefault("stance", "researched")
+        p.setdefault("evidence", {})
         p["review_html"] = md.markdown(p.get("review", "") or "", extensions=["extra"])
         p["own_note_html"] = md.markdown(p.get("own_note", "") or "", extensions=["extra"])
         if slug in result:
@@ -158,6 +160,14 @@ def prepare_comparisons(site: dict, products: dict[str, dict]) -> list[dict]:
             for s in c.get("situations", [])
         ]
         c["count"] = len(c["entries"])
+        c["owned_count"] = sum(1 for e in c["entries"] if e["product"].get("stance") == "owned")
+        # 記事全体の検証スタンス。読者が最初に知るべき情報なので冒頭に出す
+        c["stance"] = (
+            "owned" if c["owned_count"] == c["count"] and c["count"]
+            else "mixed" if c["owned_count"]
+            else "researched"
+        )
+        c["basis_html"] = md.markdown(c.get("basis", "") or "", extensions=["extra"])
         c["scene_html"] = md.markdown(c.get("scene", "") or "", extensions=["extra"])
         c["closing_html"] = md.markdown(c.get("closing", "") or "", extensions=["extra"])
         c.setdefault("table_columns", [])

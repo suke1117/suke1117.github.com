@@ -9,11 +9,14 @@
 
 1. 比較記事の型が崩れていないか
    （選ぶ基準が3つあるか、向いていない人を書いているか、不満と対処があるか）
-2. AIが書いたままの文章が公開されていないか
-   （実際に使った一言 own_note が雛形のままなら、比較記事には載せさせない）
+2. 実機を使ったかどうかの申告（stance）と、記事の中身が食い違っていないか
 
-2つ目が重要で、レビューを読ませて生成した文章をそのまま出すと、
-Amazonアソシエイトの審査でも読者の信用でも不利になる。
+   stance: owned      … 実際に使った。own_note（気づいた一言）が必須
+   stance: researched … 使っていない。evidence（何をもとに書いたか）が必須で、
+                        own_note は書けない。体験談ふうの表現も弾く
+
+   使っていない商品を「使ってみたら」と書くのは景品表示法の不当表示にあたる。
+   使っていないこと自体は問題ないので、そう書いて出せるようにしてある。
 """
 
 from __future__ import annotations
@@ -35,6 +38,12 @@ BANNED = [
     ("効果があります", "効果の断定"),
     ("最安値", "価格の断定（変動するため）"),
     ("日本一", "最上級表現の根拠が必要"),
+]
+
+# researched（実機未使用）の記事で使うと嘘になる表現
+FIRST_PERSON = [
+    "使ってみた", "使ってみて", "使ってみると", "買ってみた", "試してみた",
+    "実際に使っ", "私は", "僕は", "手元で", "届いた", "開封",
 ]
 
 # 雛形のまま残っている文章を検出する
@@ -93,7 +102,62 @@ def check_products(report: Report) -> dict[str, dict]:
             if PLACEHOLDER.search(str(p.get(field) or "")):
                 report.warn(f"{where}.{field}: 雛形の文章が残っています")
 
+        check_stance(report, where, p)
+
     return by_slug
+
+
+def check_stance(report: Report, where: str, product: dict) -> None:
+    """実機を使ったかどうかの申告と、書いてある内容が一致しているかを見る。"""
+    stance = product.get("stance")
+    if stance not in ("owned", "researched"):
+        report.error(
+            f"{where}: stance を owned か researched で宣言してください"
+            "（owned=実際に使った / researched=使っていない）"
+        )
+        return
+
+    note = str(product.get("own_note") or "").strip()
+
+    if stance == "owned":
+        if not note or PLACEHOLDER.search(note):
+            report.error(
+                f"{where}: stance が owned なのに own_note が空か雛形のままです。"
+                "使って気づいたことを1〜3行書いてください"
+            )
+        return
+
+    # ここから researched（実機未使用）
+    if note:
+        report.error(
+            f"{where}: stance が researched なのに own_note が書かれています。"
+            "使っていない商品の体験談は書けません。stance を owned にするか、own_note を消してください"
+        )
+
+    evidence = product.get("evidence") or {}
+    if not evidence.get("checked_at"):
+        report.error(f"{where}.evidence: checked_at（調べた日）が必要です")
+    if not evidence.get("sources"):
+        report.error(f"{where}.evidence: sources（何をもとに書いたか）が必要です")
+
+    # 使っていないのに体験談ふうに書いていないか
+    for field in ("summary", "review", "best_for"):
+        text = str(product.get(field) or "")
+        for word in FIRST_PERSON:
+            if word in text:
+                report.error(
+                    f"{where}.{field}: stance が researched なのに「{word}」が使われています。"
+                    "「レビューでは〜という声が多い」のように、伝聞の形で書いてください"
+                )
+                break
+    for line in (product.get("pros") or []) + (product.get("cons") or []):
+        for word in FIRST_PERSON:
+            if word in str(line):
+                report.error(
+                    f"{where}: pros/cons に体験表現「{word}」があります"
+                    "（stance が researched のため使えません）"
+                )
+                break
 
 
 def check_comparisons(report: Report, products: dict[str, dict]) -> None:
@@ -134,13 +198,14 @@ def check_comparisons(report: Report, products: dict[str, dict]) -> None:
             for field in ("for_whom", "not_for_whom"):
                 if not item.get(field):
                     report.error(f"{where}.items[{item['slug']}]: {field} がありません")
-            # 比較記事に載せる商品は、実際に使った一言が必須
-            note = str(target.get("own_note") or "").strip()
-            if not note or PLACEHOLDER.search(note):
-                report.error(
-                    f"products.yml[{item['slug']}]: own_note が空か雛形のままです。"
-                    f"比較記事『{slug}』に載せる商品には、実際に使って気づいた一言を書いてください"
-                )
+        # 実機を使った商品が1つも無い記事は、その旨を記事にも書かせる
+        stances = [products[i["slug"]].get("stance")
+                   for i in entries if i.get("slug") in products]
+        if stances and "owned" not in stances and not c.get("basis"):
+            report.warn(
+                f"{where}: 実機を使った商品が1つもありません。"
+                "basis に、何をもとに比べたのかを1〜2行で書いてください"
+            )
 
         for s in c.get("situations") or []:
             if s.get("slug") not in products:

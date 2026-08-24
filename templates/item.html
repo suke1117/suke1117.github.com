@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_card.html" import product_card, buy_button %}
+{% from "_card.html" import product_card, buy_button, stance_badge, stance_block %}
 {% block title %}{{ product.title }}のレビュー | {{ site.title }}{% endblock %}
 {% block description %}{{ product.summary }}{% endblock %}
 {% block canonical %}{{ product.url }}{% endblock %}
@@ -20,7 +20,7 @@
 {% block content %}
 <article class="item">
   <p class="crumbs"><a href="{{ base }}/">ホーム</a> / <a href="{{ base }}/categories/{{ slugify(product.category) }}/">{{ product.category }}</a></p>
-  <h1>{{ product.title }}</h1>
+  <h1>{{ product.title }} {{ stance_badge(product) }}</h1>
   <p class="lede">{{ product.summary }}</p>
 
   <div class="item-head">
@@ -51,10 +51,7 @@
   <ul class="cons">{% for x in product.cons %}<li>{{ x }}</li>{% endfor %}</ul>
   {% endif %}
 
-  {% if product.own_note_html and '（' not in product.own_note %}
-  <h2>使ってみて</h2>
-  <div class="prose own-note">{{ product.own_note_html | safe }}</div>
-  {% endif %}
+  {{ stance_block(product) }}
 
   {% if product.features %}
   <h2>主な仕様</h2>
