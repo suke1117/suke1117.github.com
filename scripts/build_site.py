@@ -248,9 +248,11 @@ def build(out: Path) -> None:
 
     product_list = sorted(products.values(), key=lambda p: p.get("title", ""))
 
+    # トップは比較記事を主役にして、商品は新着だけ出す（記載順の逆＝新しい順）
+    recent = list(reversed(list(products.values())))[:6]
     write(out, "/", env.get_template("index.html").render(
-        products=product_list, comparisons=comparisons, posts=posts[:5],
-        category_map=categories,
+        products=recent, comparisons=comparisons, posts=posts[:5],
+        category_map=categories, total_products=len(product_list),
     ))
 
     write(out, "/compare/", env.get_template("comparison_list.html").render(comparisons=comparisons))

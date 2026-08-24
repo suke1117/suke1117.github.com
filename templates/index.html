@@ -21,19 +21,20 @@
 {% endif %}
 
 <section>
-  <h2>商品レビュー</h2>
-  <div class="grid">
-    {% for p in products %}{{ product_card(p) }}{% endfor %}
-  </div>
-</section>
-
-<section>
   <h2>カテゴリ</h2>
   <ul class="tag-list">
     {% for c, items in category_map.items() %}
     <li><a href="{{ base }}/categories/{{ slugify(c) }}/">{{ c }}（{{ items | length }}）</a></li>
     {% endfor %}
   </ul>
+</section>
+
+<section>
+  <h2>新着の商品ページ</h2>
+  <div class="grid">
+    {% for p in products %}{{ product_card(p) }}{% endfor %}
+  </div>
+  <p class="note">全{{ total_products }}商品。カテゴリから一覧を見られます。</p>
 </section>
 
 {% if posts %}
