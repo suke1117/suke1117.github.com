@@ -106,6 +106,7 @@ python scripts/post_to_x.py --dry-run   # X に投稿する文面を確認（投
 | `scripts/validate.py` | 記事の型と、書いてはいけない表現のチェック |
 | `scripts/build_site.py` | サイト生成（Pinterest画像も含む） |
 | `scripts/post_to_x.py` | X自動投稿 |
+| `scripts/check_internal_links.py` | 生成後の内部リンク切れの検出（ビルドごと） |
 | `scripts/check_links.py` | 廃番リンクの検出（月1回・Actions） |
 | `scripts/fetch_products.py` | PA-APIから商品情報を取得（審査通過後） |
 | `scripts/new_item.py` | 商品の雛形を `products.yml` に追記 |

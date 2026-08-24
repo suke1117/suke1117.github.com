@@ -69,6 +69,9 @@ jobs:
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
         run: python scripts/build_site.py --out public
 
+      - name: 内部リンクの確認
+        run: python scripts/check_internal_links.py
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
