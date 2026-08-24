@@ -5,8 +5,9 @@
 {% block og_title %}{{ post.title }}{% endblock %}
 {% block content %}
 <article class="post">
+  <p class="crumbs"><a href="{{ base }}/">ホーム</a><span aria-hidden="true">/</span><a href="{{ base }}/posts/">読み物</a></p>
   <h1>{{ post.title }}</h1>
-  <p class="meta">{{ post.date }}</p>
+  <p class="article-meta"><span>{{ post.date }}</span></p>
   <div class="prose">{{ post.body_html | safe }}</div>
 </article>
 {% endblock %}

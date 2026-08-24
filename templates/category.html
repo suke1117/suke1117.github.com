@@ -1,12 +1,25 @@
 {% extends "base.html" %}
-{% from "_card.html" import product_card %}
-{% block title %}{{ category }}の記事 | {{ site.title }}{% endblock %}
+{% from "_card.html" import product_card, stance_badge %}
+{% block title %}{{ category }}の比較と商品ページ | {{ site.title }}{% endblock %}
 {% block content %}
+<p class="crumbs"><a href="{{ base }}/">ホーム</a></p>
 <h1>{{ category }}</h1>
 {% if comparisons %}
-<ul class="roundup-list">
-  {% for c in comparisons %}<li><a href="{{ base }}{{ c.path }}">{{ c.title }}</a></li>{% endfor %}
-</ul>
+<section>
+  <h2>比較記事</h2>
+  <div class="entry-grid">
+    {% for c in comparisons %}
+    <a class="entry" href="{{ base }}{{ c.path }}">
+      <span class="entry-trouble">{{ c.keyword }}</span>
+      <span class="entry-title">{{ c.title.split('｜')[0] }}</span>
+      <span class="entry-meta">{{ c.count }}商品 / 約{{ c.read_minutes }}分</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
 {% endif %}
-<div class="grid">{% for p in products %}{{ product_card(p) }}{% endfor %}</div>
+<section>
+  <h2>商品ページ</h2>
+  <div class="grid">{% for p in products %}{{ product_card(p) }}{% endfor %}</div>
+</section>
 {% endblock %}

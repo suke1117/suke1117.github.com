@@ -19,7 +19,11 @@
 {% endblock %}
 {% block content %}
 <article class="item">
-  <p class="crumbs"><a href="{{ base }}/">ホーム</a> / <a href="{{ base }}/categories/{{ slugify(product.category) }}/">{{ product.category }}</a></p>
+  <p class="crumbs">
+    <a href="{{ base }}/">ホーム</a>
+    <span aria-hidden="true">/</span>
+    <a href="{{ base }}/categories/{{ slugify(product.category) }}/">{{ product.category }}</a>
+  </p>
   <h1>{{ product.title }} {{ stance_badge(product) }}</h1>
   <p class="lede">{{ product.summary }}</p>
 
@@ -67,9 +71,15 @@
 
   {% if in_comparisons %}
   <h2>この商品を比べている記事</h2>
-  <ul class="roundup-list">
-    {% for c in in_comparisons %}<li><a href="{{ base }}{{ c.path }}">{{ c.title }}</a></li>{% endfor %}
-  </ul>
+  <div class="entry-grid">
+    {% for c in in_comparisons %}
+    <a class="entry" href="{{ base }}{{ c.path }}">
+      <span class="entry-trouble">{{ c.keyword }}</span>
+      <span class="entry-title">{{ c.title.split('｜')[0] }}</span>
+      <span class="entry-meta">{{ c.count }}商品 / 約{{ c.read_minutes }}分</span>
+    </a>
+    {% endfor %}
+  </div>
   {% endif %}
 
   {% if related %}

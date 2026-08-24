@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_card.html" import product_card %}
+{% from "_card.html" import product_card, stance_badge %}
 {% block content %}
 <section class="hero">
   <h1>{{ site.title }}</h1>
@@ -8,15 +8,16 @@
 
 {% if comparisons %}
 <section>
-  <h2>比較記事</h2>
-  <ul class="roundup-list">
+  <h2>いま困っていることから</h2>
+  <div class="entry-grid">
     {% for c in comparisons %}
-    <li>
-      <a href="{{ base }}{{ c.path }}">{{ c.title }}</a>
-      <span class="meta">{{ c.count }}商品 / 更新 {{ c.updated }}</span>
-    </li>
+    <a class="entry" href="{{ base }}{{ c.path }}">
+      <span class="entry-trouble">{{ c.keyword }}</span>
+      <span class="entry-title">{{ c.title.split('｜')[0] }}</span>
+      <span class="entry-meta">{{ c.count }}商品 / 約{{ c.read_minutes }}分</span>
+    </a>
     {% endfor %}
-  </ul>
+  </div>
 </section>
 {% endif %}
 
@@ -39,10 +40,15 @@
 
 {% if posts %}
 <section>
-  <h2>記事</h2>
+  <h2>読み物</h2>
   <ul class="post-list">
     {% for p in posts %}
-    <li><a href="{{ base }}{{ p.path }}">{{ p.title }}</a><span class="meta">{{ p.date }}</span></li>
+    <li>
+      <a href="{{ base }}{{ p.path }}">
+        <span class="post-title">{{ p.title }}</span>
+        <span class="meta">{{ p.date }}{% if p.summary %} / {{ p.summary }}{% endif %}</span>
+      </a>
+    </li>
     {% endfor %}
   </ul>
 </section>

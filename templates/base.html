@@ -2,12 +2,14 @@
 <html lang="{{ site.lang }}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}{{ site.title }}{% endblock %}</title>
 <meta name="description" content="{% block description %}{{ site.description }}{% endblock %}">
 <link rel="canonical" href="{% block canonical %}{{ site_root }}/{% endblock %}">
 <link rel="alternate" type="application/rss+xml" title="{{ site.title }}" href="{{ base }}/feed.xml">
 <link rel="stylesheet" href="{{ base }}/static/style.css">
+<meta name="theme-color" content="#faf8f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17161a" media="(prefers-color-scheme: dark)">
 <meta property="og:site_name" content="{{ site.title }}">
 <meta property="og:title" content="{% block og_title %}{{ site.title }}{% endblock %}">
 <meta property="og:description" content="{% block og_description %}{{ site.description }}{% endblock %}">
@@ -16,26 +18,40 @@
 {% block head %}{% endblock %}
 </head>
 <body>
+<a class="skip-link" href="#main">本文へスキップ</a>
+
 <header class="site-header">
-  <div class="wrap">
-    <a class="brand" href="{{ base }}/">{{ site.title }}</a>
-    <p class="tagline">{{ site.tagline }}</p>
-    <nav>
+  <div class="wrap header-inner">
+    <a class="brand" href="{{ base }}/">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+             stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12.5l5 5L20 6.5"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <span class="brand-name">{{ site.title }}</span>
+        <span class="brand-tagline">{{ site.tagline }}</span>
+      </span>
+    </a>
+    <nav class="site-nav" aria-label="サイト内">
       {% for n in site.nav %}<a href="{{ base }}{{ n.path }}">{{ n.title }}</a>{% endfor %}
     </nav>
   </div>
+  <p class="disclosure-bar">{{ site.disclosure.short }}</p>
 </header>
 
-<p class="disclosure-bar">{{ site.disclosure.short }}</p>
+{% block subnav %}{% endblock %}
 
-<main class="wrap">
+<main id="main" class="wrap">
 {% block content %}{% endblock %}
 </main>
 
 <footer class="site-footer">
   <div class="wrap">
     <p class="disclosure">{{ site.disclosure.long }}</p>
-    <nav>
+    <nav class="footer-nav" aria-label="フッター">
       <a href="{{ base }}/about/">このサイトについて</a>
       <a href="{{ base }}/disclosure/">広告について</a>
       <a href="{{ base }}/privacy/">プライバシーポリシー</a>
@@ -44,5 +60,11 @@
     <p class="copy">&copy; {{ now.year }} {{ site.author }}</p>
   </div>
 </footer>
+
+<button class="to-top" type="button" hidden aria-label="ページの先頭に戻る">
+  <span aria-hidden="true">↑</span>
+</button>
+
+<script src="{{ base }}/static/app.js" defer></script>
 </body>
 </html>

@@ -7,31 +7,66 @@
 {% block head %}
 <meta property="og:image" content="{{ comparison.pin_url | replace('.svg', '.png') }}">
 {% endblock %}
+
+{% block subnav %}
+{# いま記事のどこを読んでいるかが常に分かるようにする #}
+<nav class="section-nav" aria-label="記事内の移動">
+  <div class="section-nav-scroll">
+    <a href="#situation">状況から選ぶ</a>
+    <a href="#criteria">選ぶ基準</a>
+    <a href="#table">比較表</a>
+    <a href="#items">商品ごと</a>
+    <a href="#complaints">よくある不満</a>
+    <a href="#steps">買ったあと</a>
+  </div>
+</nav>
+{% endblock %}
+
 {% block content %}
 <article class="comparison">
-  <p class="crumbs"><a href="{{ base }}/">ホーム</a> / <a href="{{ base }}/categories/{{ slugify(comparison.category) }}/">{{ comparison.category }}</a></p>
+  <p class="crumbs">
+    <a href="{{ base }}/">ホーム</a>
+    <span aria-hidden="true">/</span>
+    <a href="{{ base }}/categories/{{ slugify(comparison.category) }}/">{{ comparison.category }}</a>
+  </p>
   <h1>{{ comparison.title }}</h1>
-  <p class="meta">{{ comparison.count }}商品を比較 / 最終更新 {{ comparison.updated }}</p>
+  <p class="article-meta">
+    <span>{{ comparison.count }}商品を比較</span>
+    <span>約{{ comparison.read_minutes }}分</span>
+    <span>更新 {{ comparison.updated }}</span>
+  </p>
+
+  {# ── 最初の1タップで自分の話に飛べるようにする ── #}
+  {% if comparison.situation_entries %}
+  <section class="picker" id="situation" aria-labelledby="picker-h">
+    <h2 id="picker-h">あなたの状況は？</h2>
+    <p class="picker-lead">選ぶと、その場合の商品まで移動します。記事を全部読む必要はありません。</p>
+    <div class="picker-options">
+      {% for s in comparison.situation_entries %}
+      <a class="picker-option" href="#item-{{ s.product.slug }}" data-target="item-{{ s.product.slug }}">
+        <span class="picker-situation">{{ s.situation }}</span>
+        <span class="picker-answer">{{ s.product.title }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 
   {# 1. 読者がいま困っている場面 #}
   <div class="prose scene">{{ comparison.scene_html | safe }}</div>
 
   {# この記事を何をもとに書いたか。使っていないなら、そう書いて先に出す #}
-  <section class="basis">
-    <h2>この記事の作り方</h2>
-    <p class="basis-summary">
-      {% if comparison.stance == 'owned' %}
-        比べた{{ comparison.count }}商品すべてを実際に使っています。
-      {% elif comparison.stance == 'mixed' %}
-        比べた{{ comparison.count }}商品のうち{{ comparison.owned_count }}商品を実際に使っています。
-        残りは仕様と購入者レビューをもとに比べています。
-      {% else %}
-        比べた{{ comparison.count }}商品は、いずれも実際には使っていません。
-        メーカー公開の仕様と、購入者レビューをもとに比べています。
-      {% endif %}
-    </p>
+  <details class="basis">
+    <summary>
+      この記事の作り方
+      <span class="basis-chip">
+        {% if comparison.stance == 'owned' %}{{ comparison.count }}商品すべて実機を使用
+        {% elif comparison.stance == 'mixed' %}{{ comparison.count }}商品中{{ comparison.owned_count }}商品が実機使用
+        {% else %}実機未使用{% endif %}
+      </span>
+    </summary>
     {% if comparison.basis_html %}<div class="prose">{{ comparison.basis_html | safe }}</div>{% endif %}
-  </section>
+  </details>
 
   {# 2. この記事が向いていない人（先に外す） #}
   {% if comparison.not_for %}
@@ -44,56 +79,88 @@
   {# 3. 選ぶときに見るべき基準。ここには意図的にリンクを置かない。
         読者がまだ選び終わっていない段階で押すと、比較表を見る前に離脱するため。 #}
   {% if comparison.criteria %}
-  <section class="criteria">
-    <h2>選ぶときに見るべき3つ</h2>
-    {% for c in comparison.criteria %}
-    <div class="criterion">
-      <h3>{{ loop.index }}. {{ c.name }}</h3>
-      <p>{{ c.why }}</p>
-      {% if c.check %}<p class="check"><strong>確認のしかた</strong>：{{ c.check }}</p>{% endif %}
-    </div>
-    {% endfor %}
+  <section class="criteria" id="criteria">
+    <h2>選ぶときに見る{{ comparison.criteria | length }}つ</h2>
+    <ol class="criteria-list">
+      {% for c in comparison.criteria %}
+      <li class="criterion">
+        <h3>{{ c.name }}</h3>
+        <p>{{ c.why }}</p>
+        {% if c.check %}<p class="check"><span class="check-label">確認のしかた</span>{{ c.check }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
   </section>
   {% endif %}
 
-  {# 4. 比較表（基準ごとに数値で並べる） #}
+  {# 4. 比較表。スマホ幅ではカードに組み替わる（style.css の data-label を参照） #}
   {% if comparison.table_columns %}
-  <section>
+  <section id="table">
     <h2>比較表</h2>
-    <div class="table-scroll">
-      <table>
-        <thead><tr><th>商品</th>{% for col in comparison.table_columns %}<th>{{ col }}</th>{% endfor %}<th>価格帯</th></tr></thead>
+    <div class="table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th scope="col">商品</th>
+            {% for col in comparison.table_columns %}<th scope="col">{{ col }}</th>{% endfor %}
+            <th scope="col">価格帯</th>
+          </tr>
+        </thead>
         <tbody>
         {% for e in comparison.entries %}
           <tr>
-            <th scope="row"><a href="{{ base }}{{ e.product.path }}">{{ e.product.title }}</a></th>
-            {% for col in comparison.table_columns %}<td>{{ e.product.specs.get(col, '-') }}</td>{% endfor %}
-            <td>{{ e.product.price_range | default('-') }}</td>
+            <th scope="row" data-label="商品"><a href="#item-{{ e.product.slug }}">{{ e.product.title }}</a></th>
+            {% for col in comparison.table_columns %}
+            {% set best = comparison.best_cells.get(col) %}
+            <td data-label="{{ col }}"{% if best and e.product.slug in best.slugs %} class="is-best"{% endif %}>
+              {{ e.product.specs.get(col, '-') }}
+              {% if best and e.product.slug in best.slugs %}<span class="best-mark">{{ best.label }}</span>{% endif %}
+            </td>
+            {% endfor %}
+            <td data-label="価格帯">{{ e.product.price_range | default('-') }}</td>
           </tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
+    {% if comparison.best_cells %}
+    <p class="note">
+      「最少」「最大」は、この記事の基準（{% for col, b in comparison.best_cells.items() %}{{ col }}{% if not loop.last %}・{% endif %}{% endfor %}）で
+      有利な向きの値に付けた印です。総合的な優劣を示すものではありません。
+    </p>
+    {% endif %}
     <p class="note">価格・仕様は変更される場合があります。購入時は販売ページの表示をご確認ください。</p>
   </section>
   {% endif %}
 
   {# 5. 商品ごとの解説。判断が固まる位置なので、各解説の末尾にリンクを1つ置く。 #}
-  <section>
+  <section id="items">
     <h2>商品ごとの解説</h2>
     <ol class="compare-items">
       {% for e in comparison.entries %}
-      <li class="compare-item">
-        <h3><a href="{{ base }}{{ e.product.path }}">{{ e.product.title }}</a> {{ stance_badge(e.product) }}</h3>
-        <p class="card-cat">{{ e.product.price_range }}{% if e.product.specs %} / {{ e.product.specs.values() | join(' / ') }}{% endif %}</p>
+      <li class="compare-item" id="item-{{ e.product.slug }}" tabindex="-1">
+        <div class="compare-item-head">
+          <h3><a href="{{ base }}{{ e.product.path }}">{{ e.product.title }}</a></h3>
+          {{ stance_badge(e.product) }}
+        </div>
+        <p class="card-cat">
+          {{ e.product.price_range }}
+          {% for col in comparison.table_columns %} / {{ col }} {{ e.product.specs.get(col, '-') }}{% endfor %}
+        </p>
         {% if e.comment %}<p class="comment">{{ e.comment }}</p>{% endif %}
-        <dl class="fit">
-          <dt>向いている人</dt><dd>{{ e.for_whom }}</dd>
-          <dt>向いていない人</dt><dd>{{ e.not_for_whom }}</dd>
-        </dl>
+        <div class="fit">
+          <div class="fit-yes">
+            <span class="fit-label">向いている人</span>
+            <p>{{ e.for_whom }}</p>
+          </div>
+          <div class="fit-no">
+            <span class="fit-label">向いていない人</span>
+            <p>{{ e.not_for_whom }}</p>
+          </div>
+        </div>
         {{ stance_block(e.product) }}
         {{ buy_button(e.product) }}
-        <p><a href="{{ base }}{{ e.product.path }}">この商品の詳細を読む →</a></p>
+        <p class="more-link"><a href="{{ base }}{{ e.product.path }}">この商品の詳細を読む</a></p>
       </li>
       {% endfor %}
     </ol>
@@ -101,26 +168,29 @@
 
   {# 6. レビューで多かった不満と、その対処 #}
   {% if comparison.complaints %}
-  <section>
+  <section id="complaints">
     <h2>レビューで多かった不満と、その対処</h2>
-    <dl class="complaints">
+    <div class="complaints">
       {% for c in comparison.complaints %}
-      <dt>{{ c.complaint }}</dt>
-      <dd>{{ c.fix }}</dd>
+      <details>
+        <summary>{{ c.complaint }}</summary>
+        <p>{{ c.fix }}</p>
+      </details>
       {% endfor %}
-    </dl>
+    </div>
   </section>
   {% endif %}
 
   {# 7. 状況別のおすすめ。ここまで読んだ人は比べ終わって疲れているので、
         3行でまとめてリンクを再掲する。 #}
   {% if comparison.situation_entries %}
-  <section class="situations">
+  <section class="situations" id="answer">
     <h2>状況別のおすすめ</h2>
     {% for s in comparison.situation_entries %}
     <div class="situation">
       <h3>{{ s.situation }}</h3>
-      <p><strong>{{ s.product.title }}</strong> — {{ s.reason }}</p>
+      <p class="situation-answer"><strong>{{ s.product.title }}</strong></p>
+      <p>{{ s.reason }}</p>
       {{ buy_button(s.product) }}
     </div>
     {% endfor %}
@@ -129,14 +199,14 @@
 
   {# 8. 買ったあと、最初にやること #}
   {% if comparison.first_steps %}
-  <section>
+  <section id="steps">
     <h2>買ったあと、最初にやること</h2>
     <ol class="first-steps">{% for x in comparison.first_steps %}<li>{{ x }}</li>{% endfor %}</ol>
   </section>
   {% endif %}
 
   {% if comparison.closing_html %}
-  <div class="prose">{{ comparison.closing_html | safe }}</div>
+  <div class="prose closing">{{ comparison.closing_html | safe }}</div>
   {% endif %}
 
   {# 回遊：比べ物をしている人は、1つ決めたら次の物を探し始める #}
@@ -144,11 +214,11 @@
   <section class="related">
     <h2>次に迷いそうなこと</h2>
     {% for r in comparison.related_links %}
-    <div class="related-item">
-      <p class="next-trouble">{{ r.next_trouble }}</p>
-      <p><a href="{{ base }}{{ r.target.path }}">{{ r.target.title }}</a></p>
-      <p class="lead-in">{{ r.lead }}</p>
-    </div>
+    <a class="related-item" href="{{ base }}{{ r.target.path }}">
+      <span class="next-trouble">{{ r.next_trouble }}</span>
+      <span class="related-title">{{ r.target.title }}</span>
+      <span class="lead-in">{{ r.lead }}</span>
+    </a>
     {% endfor %}
     <p class="note">いま決めなくても大丈夫です。必要になったときに読んでください。</p>
   </section>

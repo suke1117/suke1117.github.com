@@ -1,14 +1,17 @@
 {% macro product_card(p) %}
 <article class="card">
-  <a class="card-thumb" href="{{ base }}{{ p.path }}">
-    {% if p.image %}<img src="{{ p.image }}" alt="{{ p.title }}" loading="lazy">
+  <a class="card-thumb" href="{{ base }}{{ p.path }}" tabindex="-1" aria-hidden="true">
+    {% if p.image %}<img src="{{ p.image }}" alt="" loading="lazy">
     {% else %}<span class="thumb-placeholder">{{ p.category }}</span>{% endif %}
   </a>
   <div class="card-body">
     <p class="card-cat">{{ p.category }}</p>
     <h3><a href="{{ base }}{{ p.path }}">{{ p.title }}</a></h3>
     <p class="card-summary">{{ p.summary }}</p>
-    {% if p.price_range and site.price_display != 'none' %}<p class="card-price">{{ p.price_range }}</p>{% endif %}
+    <p class="card-foot">
+      {% if p.price_range and site.price_display != 'none' %}<span class="card-price">{{ p.price_range }}</span>{% endif %}
+      {{ stance_badge(p) }}
+    </p>
   </div>
 </article>
 {% endmacro %}
@@ -16,8 +19,10 @@
 {% macro buy_button(p, label='Amazonで見る') %}
 {% if p.amazon_url %}
 <p class="buy">
-  <a class="buy-btn" href="{{ p.amazon_url }}" rel="nofollow sponsored noopener" target="_blank">{{ label }}</a>
-  <span class="buy-note">{{ site.disclosure.short }}{% if not has_tag %} / 現在アフィリエイトタグは未設定です{% endif %}</span>
+  <a class="buy-btn" href="{{ p.amazon_url }}" rel="nofollow sponsored noopener" target="_blank">
+    {{ label }}<span class="buy-ext" aria-hidden="true">↗</span>
+  </a>
+  <span class="buy-note">{{ site.disclosure.short }}{% if not has_tag %} / アフィリエイトタグ未設定{% endif %}</span>
 </p>
 {% endif %}
 {% endmacro %}

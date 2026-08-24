@@ -3,12 +3,14 @@
 {% block canonical %}{{ site_root }}/compare/{% endblock %}
 {% block content %}
 <h1>比較記事</h1>
-<ul class="roundup-list">
+<p class="lede">選ぶ基準を先に決めてから、商品を比べています。</p>
+<div class="entry-grid">
   {% for c in comparisons %}
-  <li>
-    <a href="{{ base }}{{ c.path }}">{{ c.title }}</a>
-    <span class="meta">{{ c.count }}商品 / {{ c.updated }}</span>
-  </li>
+  <a class="entry" href="{{ base }}{{ c.path }}">
+    <span class="entry-trouble">{{ c.keyword }}</span>
+    <span class="entry-title">{{ c.title.split('｜')[0] }}</span>
+    <span class="entry-meta">{{ c.count }}商品 / 約{{ c.read_minutes }}分 / 更新 {{ c.updated }}</span>
+  </a>
   {% endfor %}
-</ul>
+</div>
 {% endblock %}

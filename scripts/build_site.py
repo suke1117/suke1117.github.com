@@ -133,6 +133,36 @@ def prepare_products(site: dict) -> dict[str, dict]:
     return result
 
 
+NUMBER = re.compile(r"[\d.]+")
+
+
+def mark_best_values(comparison: dict) -> None:
+    """比較表の数値列で、その記事の基準にとって有利な値に印を付ける。
+
+    どちら向きが有利かは comparisons.yml の highlight で宣言する。
+    「この列で最も◯◯」という事実を示すだけで、総合的な優劣は示さない。
+    """
+    highlight = comparison.get("highlight") or {}
+    comparison["best_cells"] = {}
+    for column, direction in highlight.items():
+        values = {}
+        for entry in comparison["entries"]:
+            raw = str((entry["product"].get("specs") or {}).get(column, ""))
+            found = NUMBER.search(raw)
+            if found:
+                try:
+                    values[entry["product"]["slug"]] = float(found.group())
+                except ValueError:
+                    pass
+        if not values:
+            continue
+        best = min(values.values()) if direction == "min" else max(values.values())
+        comparison["best_cells"][column] = {
+            "slugs": [s for s, v in values.items() if v == best],
+            "label": "最少" if direction == "min" else "最大",
+        }
+
+
 def prepare_comparisons(site: dict, products: dict[str, dict]) -> list[dict]:
     """comparisons.yml を、テンプレートがそのまま描ける形に整える。"""
     prepared = []
@@ -168,6 +198,16 @@ def prepare_comparisons(site: dict, products: dict[str, dict]) -> list[dict]:
             else "researched"
         )
         c["basis_html"] = md.markdown(c.get("basis", "") or "", extensions=["extra"])
+        mark_best_values(c)
+        # 読了の目安。細切れの時間で読まれるので、先に伝えておく
+        text = " ".join(str(v) for v in (
+            [c.get("scene", ""), c.get("closing", ""), c.get("basis", "")]
+            + [x.get("why", "") + x.get("check", "") for x in c.get("criteria") or []]
+            + [x.get("complaint", "") + x.get("fix", "") for x in c.get("complaints") or []]
+            + [e.get("comment", "") + e.get("for_whom", "") + e.get("not_for_whom", "")
+               for e in c["entries"]]
+        ))
+        c["read_minutes"] = max(2, round(len(text) / 500))
         c["scene_html"] = md.markdown(c.get("scene", "") or "", extensions=["extra"])
         c["closing_html"] = md.markdown(c.get("closing", "") or "", extensions=["extra"])
         c.setdefault("table_columns", [])

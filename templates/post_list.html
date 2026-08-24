@@ -1,11 +1,19 @@
 {% extends "base.html" %}
-{% block title %}記事一覧 | {{ site.title }}{% endblock %}
+{% block title %}読み物 | {{ site.title }}{% endblock %}
 {% block canonical %}{{ site_root }}/posts/{% endblock %}
 {% block content %}
-<h1>記事一覧</h1>
+<h1>読み物</h1>
+<p class="lede">商品に紐づかない、選び方や使い方の記事です。</p>
 {% if posts %}
 <ul class="post-list">
-  {% for p in posts %}<li><a href="{{ base }}{{ p.path }}">{{ p.title }}</a><span class="meta">{{ p.date }}</span></li>{% endfor %}
+  {% for p in posts %}
+  <li>
+    <a href="{{ base }}{{ p.path }}">
+      <span class="post-title">{{ p.title }}</span>
+      <span class="meta">{{ p.date }}{% if p.summary %} / {{ p.summary }}{% endif %}</span>
+    </a>
+  </li>
+  {% endfor %}
 </ul>
 {% else %}
 <p>まだ記事がありません。<code>content/posts/</code> に Markdown を追加すると、ここに並びます。</p>
