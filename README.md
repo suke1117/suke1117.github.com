@@ -100,8 +100,9 @@ python scripts/post_to_x.py --dry-run   # X に投稿する文面を確認（投
 | `data/state/x_posted.json` | 投稿履歴（自動更新。手で触らない） |
 | `content/posts/*.md` | 商品に紐づかない読み物記事 |
 | `docs/prompts/` | Claudeに投げるプロンプト集（STEP1・2・4） |
+| `docs/genre-pet.md` | **いま進めているクラスタ**（ペット用品6ジャンル） |
 | `docs/high-demand-themes.md` | 需要の大きいテーマの並べ直し |
-| `docs/genre-candidates.md` | STEP1の実行結果（3クラスタ×5ジャンル） |
+| `docs/genre-candidates.md` | STEP1の実行結果（デスク環境ほか3クラスタ） |
 | `scripts/validate.py` | 記事の型と、書いてはいけない表現のチェック |
 | `scripts/build_site.py` | サイト生成（Pinterest画像も含む） |
 | `scripts/post_to_x.py` | X自動投稿 |

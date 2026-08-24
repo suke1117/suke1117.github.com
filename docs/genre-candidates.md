@@ -1,5 +1,10 @@
 # ジャンル候補（STEP1の実行結果）
 
+> **現在の進行**: このリポジトリは [genre-pet.md](genre-pet.md) のペット用品クラスタで進めています。
+> このファイルは、次に着手する候補として残しています。
+> クラスタA（デスク環境）の1本目の骨組みは `data/drafts/monitor-light.yml` にあります。
+
+
 [`prompts/01-genre-research.md`](prompts/01-genre-research.md) のプロンプトを実行した結果です。
 
 条件は「数値やサイズで比べられる」「型番が変わりにくい」「比較記事が少ない」
