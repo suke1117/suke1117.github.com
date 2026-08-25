@@ -119,6 +119,7 @@ JavaScript が動かなくても、記事の内容と導線はすべて使えま
 | `content/posts/*.md` | 商品に紐づかない読み物記事 |
 | `docs/prompts/` | Claudeに投げるプロンプト集（STEP1・2・4） |
 | `docs/ux-target.md` | UIの設計方針（ターゲットと原則） |
+| `docs/distribution.md` | 集客の設計（検索・Pinterest・SNSの役割分担） |
 | `docs/genre-pet.md` | **いま進めているクラスタ**（ペット用品6ジャンル） |
 | `docs/high-demand-themes.md` | 需要の大きいテーマの並べ直し |
 | `docs/genre-candidates.md` | STEP1の実行結果（デスク環境ほか3クラスタ） |
