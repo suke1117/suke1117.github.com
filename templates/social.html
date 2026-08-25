@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}投稿用の素材 | {{ site.title }}{% endblock %}
+{% block head %}<meta name="robots" content="noindex">{% endblock %}
+{% block content %}
+<h1>投稿用の素材</h1>
+<p class="lede">
+  SNSに投稿するときは、ここから画像とキャプションを取り出します。
+  検索エンジンには載せません（noindex）。
+</p>
+
+<div class="not-for">
+  <h2>投稿する前に</h2>
+  <ul>
+    <li>画像は <code>.png</code> を使ってください（Pinterest も Instagram も SVG を受け付けません）。PNG は GitHub Actions のビルド時に生成されます</li>
+    <li>広告であることの表示は、画像とキャプションの両方に入っています。<strong>消さないでください</strong></li>
+    <li>リンク先は自サイトです。SNSにAmazonのリンクを直接貼る運用はしていません（<a href="{{ base }}/disclosure/">理由</a>）</li>
+  </ul>
+</div>
+
+{% for c in comparisons %}
+<section class="social-item">
+  <h2>{{ c.title.split('｜')[0] }}</h2>
+  <p class="card-cat">{{ c.keyword }} / {{ c.count }}商品 / <a href="{{ base }}{{ c.path }}">記事を見る</a></p>
+
+  <h3>Pinterest（3枚）</h3>
+  <ul class="asset-list">
+    {% for v in c.pin_variants %}
+    <li>
+      <a href="{{ base }}{{ v.path | replace('.svg', '.png') }}">{{ v.label }}（PNG）</a>
+      <a class="asset-sub" href="{{ base }}{{ v.path }}">SVG</a>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="note">ピンのリンク先は <code>{{ site_root }}{{ c.path }}?utm_source=pinterest&amp;utm_medium=social&amp;utm_campaign={{ c.slug }}</code></p>
+
+  <h3>Instagram（カルーセル{{ c.carousel | length }}枚）</h3>
+  <ul class="asset-list">
+    {% for path in c.carousel %}
+    <li><a href="{{ base }}{{ path | replace('.svg', '.png') }}">{{ loop.index }}枚目</a></li>
+    {% endfor %}
+  </ul>
+  <p class="note">キャプション（コピーして使う）</p>
+  <pre class="caption">{{ c.ig_caption }}</pre>
+
+  <h3>Threads / X</h3>
+  <p class="note">
+    文面は <code>python scripts/post_to_threads.py --dry-run</code> で確認できます。
+    Threads は{{ threads_config.min_repost_interval_days | default(10) }}日、
+    X は7日あけて自動で投稿されます。
+  </p>
+</section>
+{% endfor %}
+{% endblock %}

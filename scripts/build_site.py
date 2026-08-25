@@ -30,7 +30,9 @@ import markdown as md
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+import carousel_image
 import pin_image
+import social
 from common import (
     ROOT,
     amazon_url,
@@ -171,6 +173,12 @@ def prepare_comparisons(site: dict, products: dict[str, dict]) -> list[dict]:
         c["url"] = url_for(site, c["path"])
         c["pin_path"] = f"/pin/{c['slug']}.svg"
         c["pin_url"] = url_for(site, c["pin_path"])
+        c["pin_variants"] = [
+            {"name": name,
+             "label": label,
+             "path": f"/pin/{c['slug']}.svg" if name == "table" else f"/pin/{c['slug']}-{name}.svg"}
+            for name, label in (("table", "比較表"), ("criteria", "選ぶ基準"), ("mistakes", "よくある失敗"))
+        ]
 
         def resolve(slug: str, where: str) -> dict:
             product = products.get(slug)
@@ -242,19 +250,23 @@ def write(out: Path, path: str, content: str) -> None:
 
 
 def rasterize(out: Path) -> None:
-    """rsvg-convert があれば Pinterest 用の SVG を PNG にも書き出す。
+    """rsvg-convert があれば SNS 用の SVG を PNG にも書き出す。
 
-    Pinterest は SVG を受け付けないため、PNG があるとそのまま投稿できる。
+    Pinterest も Instagram も SVG のアップロードを受け付けないため、
+    PNG があるとそのまま投稿できる。
     ローカルに rsvg-convert が無い場合は SVG だけ残して黙って進む。
     """
     if not shutil.which("rsvg-convert"):
         return
-    for svg in (out / "pin").glob("*.svg"):
-        subprocess.run(
-            ["rsvg-convert", "-w", str(pin_image.WIDTH), "-h", str(pin_image.HEIGHT),
-             "-o", str(svg.with_suffix(".png")), str(svg)],
-            check=True,
-        )
+    sizes = {"pin": (pin_image.WIDTH, pin_image.HEIGHT),
+             "ig": (carousel_image.WIDTH, carousel_image.HEIGHT)}
+    for folder, (width, height) in sizes.items():
+        for source in (out / folder).glob("*.svg"):
+            subprocess.run(
+                ["rsvg-convert", "-w", str(width), "-h", str(height),
+                 "-o", str(source.with_suffix(".png")), str(source)],
+                check=True,
+            )
 
 
 def build(out: Path) -> None:
@@ -298,7 +310,22 @@ def build(out: Path) -> None:
     write(out, "/compare/", env.get_template("comparison_list.html").render(comparisons=comparisons))
     for c in comparisons:
         write(out, c["path"], env.get_template("comparison.html").render(comparison=c))
-        write(out, c["pin_path"], pin_image.render(c, site))
+        # Pinterest：1記事につき3つの切り口を出して、入口を増やす
+        for variant in c["pin_variants"]:
+            write(out, variant["path"], pin_image.render(c, site, variant["name"]))
+        # Instagram：縦型カルーセル。送客ではなく保存を狙う
+        c["carousel"] = []
+        for i, slide in enumerate(carousel_image.render_slides(c, site), 1):
+            path = f"/ig/{c['slug']}-{i}.svg"
+            write(out, path, slide)
+            c["carousel"].append(path)
+        c["ig_caption"] = carousel_image.caption(c, site)
+
+    # 投稿するときにここから素材を取り出す
+    write(out, "/social/", env.get_template("social.html").render(
+        comparisons=comparisons,
+        threads_config=load_yaml("threads_templates.yml", {}) or {},
+    ))
 
     for p in product_list:
         write(out, p["path"], env.get_template("item.html").render(
@@ -349,6 +376,8 @@ def build(out: Path) -> None:
     print(f"  商品ページ   {len(product_list)}")
     print(f"  記事         {len(posts)}")
     print(f"  カテゴリ     {len(categories)}")
+    print(f"  Pinterest画像 {len(comparisons) * 3}")
+    print(f"  Instagram    {sum(len(c['carousel']) for c in comparisons)}枚")
     if not has_associate_tag(site):
         print("  ※ associate_tag が未設定のため、Amazonリンクはタグなしで出力されています。")
 

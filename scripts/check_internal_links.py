@@ -70,6 +70,7 @@ def main() -> None:
     pages = sorted(out.rglob("*.html"))
     broken: list[tuple[str, str]] = []
     checked = 0
+    skipped_png = 0
 
     for page in pages:
         finder = LinkFinder()
@@ -79,10 +80,18 @@ def main() -> None:
             if target is None:
                 continue
             checked += 1
-            if not target.exists():
-                broken.append((str(page.relative_to(out)), href))
+            if target.exists():
+                continue
+            # SNS用の PNG は rsvg-convert のある環境（CI）でのみ生成される。
+            # 元の SVG があれば、手元では欠けていて当然なので数えない。
+            if target.suffix == ".png" and target.with_suffix(".svg").exists():
+                skipped_png += 1
+                continue
+            broken.append((str(page.relative_to(out)), href))
 
     print(f"{len(pages)}ページ / 内部リンク {checked}本を確認")
+    if skipped_png:
+        print(f"（SNS用PNG {skipped_png}本は、SVGがあるため未生成でも可としました）")
     if broken:
         print(f"\nリンク切れ {len(broken)}件:")
         for page, href in broken:

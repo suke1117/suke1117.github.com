@@ -6,15 +6,17 @@
 
 1. **比較記事**を生成して GitHub Pages に公開し、
 2. **記事どうしの回遊**と **Pinterest用の比較表画像**を自動で作り、
-3. その記事を **X（旧Twitter）に定期投稿**する
+3. その記事を **X と Threads に定期投稿**し、
+4. **Pinterest と Instagram 用の画像**を書き出す
 
 ところまでを GitHub Actions が回します。サーバー代はかかりません。
 
 ```
                         ┌─> 比較記事（8構成・リンク位置は固定）
-data/comparisons.yml ───┼─> 比較表画像（Pinterest用 1000x1500）
-data/products.yml    ───┼─> 回遊リンク（次に迷いそうなこと）
-                        └─> X の投稿文（1日4回・#PR付き）
+                        ├─> 回遊リンク（次に迷いそうなこと）
+data/comparisons.yml ───┼─> Pinterest画像 3枚（1000x1500）
+data/products.yml    ───┼─> Instagramカルーセル 8枚（1080x1350）＋キャプション
+                        └─> X / Threads の投稿文（#PR付き・UTM付き）
         ▲
         │  docs/prompts/ のプロンプトで Claude に生成させる
         │
@@ -115,6 +117,7 @@ JavaScript が動かなくても、記事の内容と導線はすべて使えま
 | `data/products.yml` | 商品マスタ。`specs` が比較表の列になる |
 | `data/comparisons.yml` | 比較記事の定義（8構成 ＋ 回遊） |
 | `data/x_templates.yml` | X投稿の文面テンプレートと投稿間隔 |
+| `data/threads_templates.yml` | Threads投稿の文面テンプレート |
 | `data/state/x_posted.json` | 投稿履歴（自動更新。手で触らない） |
 | `content/posts/*.md` | 商品に紐づかない読み物記事 |
 | `docs/prompts/` | Claudeに投げるプロンプト集（STEP1・2・4） |
@@ -125,7 +128,11 @@ JavaScript が動かなくても、記事の内容と導線はすべて使えま
 | `docs/genre-candidates.md` | STEP1の実行結果（デスク環境ほか3クラスタ） |
 | `scripts/validate.py` | 記事の型と、書いてはいけない表現のチェック |
 | `scripts/build_site.py` | サイト生成（Pinterest画像も含む） |
-| `scripts/post_to_x.py` | X自動投稿 |
+| `scripts/social.py` | SNS投稿の共通処理（対象の選択・文面生成・UTM） |
+| `scripts/post_to_x.py` | X自動投稿（1日4回） |
+| `scripts/post_to_threads.py` | Threads自動投稿（1日2回） |
+| `scripts/pin_image.py` | Pinterest画像（1記事3枚） |
+| `scripts/carousel_image.py` | Instagramカルーセル（1記事8枚）とキャプション |
 | `scripts/check_internal_links.py` | 生成後の内部リンク切れの検出（ビルドごと） |
 | `scripts/check_links.py` | 廃番リンクの検出（月1回・Actions） |
 | `scripts/fetch_products.py` | PA-APIから商品情報を取得（審査通過後） |
@@ -137,7 +144,26 @@ JavaScript が動かなくても、記事の内容と導線はすべて使えま
 | --- | --- | --- |
 | サイトのビルドと公開 | push時 ＋ 毎日09:00 JST | validate → PA-API更新 → 生成 → Pages公開 |
 | Xへの自動投稿 | 1日4回 | 直近7日に投稿していない記事を1本投稿 |
+| Threadsへの自動投稿 | 1日2回 | 直近10日に投稿していない記事を1本投稿 |
 | 商品リンクの生存確認 | 毎月1日 | 廃番を検出したら Issue を作成 |
+
+## 集客
+
+サイトを作っただけでは読まれません。設計は [docs/distribution.md](docs/distribution.md) にあります。
+
+| 手段 | 位置づけ |
+| --- | --- |
+| 検索 | **主軸**。この手法の本体 |
+| Pinterest | **第2の主軸**。フォロワー不要で、ピンが蓄積する |
+| Threads | 立ち上げ期に手数が最も少ない |
+| Instagram | 送客は弱い。保存される情報を出す |
+| X | フォロワーが少ないうちは、ほぼ届かない |
+
+**SNSにAmazonのリンクは貼りません。** リンク先は自サイトに統一しています
+（アソシエイトの媒体登録、Meta系の直貼り制限、計測のため）。
+
+投稿用の素材は、ビルドすると `/social/` にまとまります（noindex）。
+画像のPNGとキャプションをそこから取り出して投稿してください。
 
 ## セットアップ
 

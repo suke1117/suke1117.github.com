@@ -1,0 +1,64 @@
+# ─────────────────────────────────────────────
+# Threads 自動投稿の設定
+#
+# Threads は外部リンクが貼れて、テキストだけで投稿が成立する。
+# 立ち上げ期にいちばん手数が少ない（docs/distribution.md 参照）。
+#
+# 文字数の上限は500字。Xより長く書けるので、
+# 「レビューで多かった不満」のような中身をそのまま出す。
+# ─────────────────────────────────────────────
+
+posts_per_run: 1
+min_repost_interval_days: 10
+link_target: "site"
+
+# ステマ規制対応：広告であることを明示する文言。消さないこと。
+# 末尾のハッシュタグに紛れさせず、本文の一部として読める位置に置く。
+ad_label: "#PR"
+
+# 商品ページ用
+# 使える変数: {title} {summary} {best_for} {price_range} {category} {pros1} {cons1} {url} {ad_label}
+templates:
+  - |
+    {title}
+
+    {summary}
+
+    良いところ：{pros1}
+    気になるところ：{cons1}
+
+    {ad_label} くわしくはこちら
+    {url}
+
+# 比較記事用
+# 使える変数: {title} {short_title} {keyword} {scene1} {criteria1} {criteria1_why}
+#             {not_for1} {complaint1} {fix1} {count} {url} {ad_label}
+comparison_templates:
+  - |
+    {short_title}
+
+    レビューで多かった不満：
+    「{complaint1}」
+
+    これは{fix1}
+
+    {count}商品を比べた記事はこちら。{ad_label}
+    {url}
+  - |
+    「{keyword}」で調べている人向け。
+
+    選ぶときに最初に見るのは「{criteria1}」です。
+    {criteria1_why}
+
+    ここを外すと、値段に関係なく合いません。
+
+    {ad_label}
+    {url}
+  - |
+    {scene1}
+
+    先に書いておくと、この記事が向いていないのは
+    ・{not_for1}
+
+    それ以外の人向けに、{count}商品を比べています。{ad_label}
+    {url}
