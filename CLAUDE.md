@@ -22,6 +22,8 @@ src/
   models/      LightGBM ランカー, Plackett-Luce, Isotonic 較正, train_lgbm.py CLI, predict.py
   betting/     Kelly 計算 (kelly_calculator.py CLI), ベット選択戦略 (strategy.py)
   backtest/    ウォークフォワード・ペーパーベッティング simulator.py CLI, パラメータ探索 sweep.py CLI, metrics.py
+  web/         ダッシュボード用データ書き出し export_dashboard.py, 単体HTMLビルド build_static.py
+web/           静的ダッシュボード (index.html + data.json)
 tests/         pytest (リーク検査・確率整合性・Kelly 制約を含む)
 raw_data/      JRA-VAN CSV エクスポート置き場 (git 管理外)
 processed/     前処理済み特徴量 (git 管理外)

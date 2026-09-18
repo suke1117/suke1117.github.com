@@ -13,6 +13,7 @@
 | 市場ブレンド | `src/models/market_blend.py` (Benter 条件付きロジット) | なし |
 | 資金管理 | `src/betting/kelly_calculator.py`, `src/betting/strategy.py` | なし |
 | 検証 | `src/backtest/simulator.py`, `src/backtest/sweep.py`, `src/backtest/metrics.py` | なし |
+| 可視化 | `src/web/export_dashboard.py`, `src/web/build_static.py`, `web/index.html` | なし |
 | 競技定数 | `src/common/sport.py` (`SportSpec`: 競馬 18 頭 / 競輪 9 車 / 競艇 6 艇) | 定義のみ |
 
 ## 2. リーク防止の仕組み

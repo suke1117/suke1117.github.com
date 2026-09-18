@@ -37,6 +37,7 @@ pip install -r requirements.txt
 | 4 バックテスト | `python src/backtest/simulator.py --start_date 2022-01-01 --end_date 2023-12-31` |
 | 4b パラメータ探索 | `python src/backtest/sweep.py --start_date 2021-01-01 --end_date 2023-12-31 --holdout_start 2023-04-01` |
 | 推論 | `python src/models/predict.py --data processed/train.csv --model_dir artifacts/` |
+| ダッシュボード | `python src/web/export_dashboard.py --output web/data.json` |
 | テスト | `python -m pytest tests/ -q` |
 | 全部 | `make all` |
 
@@ -72,6 +73,21 @@ EV 閾値と Kelly 係数をウォークフォワードで探索します。ウ�
 
 選ばれたのは α=0.02、EV≥1.30、1レース1点でした。α を 0.02 から 0.25 に上げると収益は増えますが、
 最大ドローダウンは 6% から 52.5% へと収益より速く悪化します。これが Fractional Kelly を採用する理由です。
+
+## ダッシュボード
+
+`web/index.html` はバックテストと探索の結果を可視化する静的ページです。`web/data.json` を読み込むだけなので、
+バックテストを回すたびに書き出し直せば内容が更新されます。GitHub Pages でそのまま配信できます。
+
+```bash
+make dashboard     # data.json の書き出しと、データを埋め込んだ単体 HTML のビルド
+```
+
+- `web/index.html` + `web/data.json`: 静的サイト用 (Pages 配信を想定)
+- `web/dist/index.html`: データを埋め込んだ単体ファイル (1 ファイルで完結)
+
+表示内容は、資産曲線とドローダウン、ケリー係数 α の感度、期待値閾値の感度、探索期間とホールドアウト期間の成績差、
+確率較正の当たり具合、月次収支、オッズ帯別成績、再学習の期ごとの成績、モデル単体の精度、効いている安全装置です。
 
 ## 出力
 

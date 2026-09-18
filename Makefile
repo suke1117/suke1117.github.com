@@ -24,3 +24,7 @@ clean:
 
 sweep:
 	$(PY) src/backtest/sweep.py --start_date 2021-01-01 --end_date 2023-12-31 --holdout_start 2023-04-01
+
+dashboard:
+	$(PY) src/web/export_dashboard.py --output web/data.json
+	$(PY) src/web/build_static.py --output web/dist/index.html
