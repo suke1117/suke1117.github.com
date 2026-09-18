@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -37,6 +37,10 @@ from src.common.logging_utils import get_logger  # noqa: E402
 from src.models.train_lgbm import fit_pipeline, load_table  # noqa: E402
 
 log = get_logger("backtest")
+
+#: columns carried from a predicted period into the betting stage
+PREDICTION_COLUMNS = ["race_date", "race_id", "entrant_id", "n_runners", "finish_position", "win_odds", "score",
+                      "p_win_raw", "p_win_model", "p_win"]
 
 
 def period_boundaries(start: pd.Timestamp, end: pd.Timestamp, months: int) -> List[pd.Timestamp]:
@@ -60,9 +64,16 @@ class WalkForwardSimulator:
         self.market_blend = market_blend
         self.compound = compound
 
-    def run(self, start: pd.Timestamp, end: pd.Timestamp):
-        bankroll = self.start_bankroll
-        bet_rows, daily_rows, period_rows = [], [], []
+    # ------------------------------------------------------------------
+    # Stage 1: walk-forward out-of-sample predictions (expensive; policy-free)
+    # ------------------------------------------------------------------
+    def generate_predictions(self, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+        """Refit the pipeline on every period boundary and predict that period.
+
+        The result depends only on the data and the retrain schedule - never on
+        the betting policy - so a parameter sweep can reuse one pass of this.
+        """
+        frames = []
         bounds = period_boundaries(start, end, self.retrain_months)
         for p_start, p_end in zip(bounds[:-1], bounds[1:]):
             hist = self.table[self.table["race_date"] < p_start]
@@ -77,40 +88,68 @@ class WalkForwardSimulator:
                 "time ordering violated"
             predictor = fit_pipeline(train, calib, self.feature_cols, self.categorical_cols, market_blend=self.market_blend)
             pred = predictor.predict(period)
-            log.info("period %s..%s | train<%s (%d races) calib (%d) | bet on %d races | blend a=%.2f b=%.2f | bankroll %.0f",
+            log.info("period %s..%s | train<%s (%d races) calib (%d) | predict %d races | blend a=%.2f b=%.2f",
                      p_start.date(), (p_end - pd.Timedelta(days=1)).date(), calib_start.date(), train["race_id"].nunique(),
-                     calib["race_id"].nunique(), period["race_id"].nunique(), predictor.blend.a, predictor.blend.b, bankroll)
+                     calib["race_id"].nunique(), period["race_id"].nunique(), predictor.blend.a, predictor.blend.b)
+            pred = pred[PREDICTION_COLUMNS].copy()
+            pred["period_start"] = p_start
+            pred["period_end"] = p_end - pd.Timedelta(days=1)
+            pred["blend_a"] = predictor.blend.a
+            pred["blend_b"] = predictor.blend.b
+            pred["pl_temperature"] = predictor.temperature.temperature
+            frames.append(pred)
+        if not frames:
+            return pd.DataFrame(columns=PREDICTION_COLUMNS + ["period_start", "period_end", "blend_a", "blend_b",
+                                                             "pl_temperature"])
+        return pd.concat(frames, ignore_index=True).sort_values(["race_date", "race_id"], kind="stable")
+
+    # ------------------------------------------------------------------
+    # Stage 2: paper betting over pre-computed predictions (cheap; policy-dependent)
+    # ------------------------------------------------------------------
+    def simulate(self, pred: pd.DataFrame, policy: Optional[BetPolicy] = None, bankroll: Optional[float] = None,
+                 compound: Optional[bool] = None):
+        """Settle paper bets over ``pred`` (from :meth:`generate_predictions`)."""
+        policy = policy or self.policy
+        start_bankroll = self.start_bankroll if bankroll is None else bankroll
+        compound = self.compound if compound is None else compound
+        bank = start_bankroll
+        bet_rows, daily_rows, period_rows = [], [], []
+        if pred.empty:
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+        for (p_start, p_end), period_pred in pred.groupby(["period_start", "period_end"], sort=True):
             p_bets, p_profit, p_staked = 0, 0.0, 0.0
-            for day, day_df in pred.groupby("race_date", sort=True):
-                day_start = bankroll
+            for day, day_df in period_pred.groupby("race_date", sort=True):
+                day_start = bank
                 for race_id, race in day_df.groupby("race_id", sort=True):
                     race = race.reset_index(drop=True)
-                    bets = select_win_bets(race, bankroll, self.policy,
-                                           sizing_bankroll=None if self.compound else self.start_bankroll)
+                    bets = select_win_bets(race, bank, policy,
+                                           sizing_bankroll=None if compound else start_bankroll)
                     if not bets:
                         continue
                     fp = dict(zip(race["entrant_id"], race["finish_position"]))
                     for b in bets:
                         payout_odds = 1.0 + (b.odds - 1.0) * (1.0 - self.odds_haircut)
                         profit = settle_win_bet(b, int(fp[b.entrant_id]), payout_odds)
-                        bankroll += profit
+                        bank += profit
                         p_bets += 1
                         p_profit += profit
                         p_staked += b.stake
                         bet_rows.append({"race_date": day, "race_id": race_id, "entrant_id": b.entrant_id, "prob": b.prob,
                                          "odds": b.odds, "payout_odds": payout_odds, "ev": b.ev, "fraction": b.fraction,
                                          "stake": b.stake, "won": int(fp[b.entrant_id] == 1), "profit": profit,
-                                         "bankroll_after": bankroll})
-                daily_rows.append({"race_date": day, "bankroll": bankroll, "ret": bankroll / day_start - 1.0})
-            period_rows.append({"period_start": p_start, "period_end": p_end - pd.Timedelta(days=1), "n_bets": p_bets,
-                                "staked": p_staked, "profit": p_profit,
-                                "recovery_rate": (p_staked + p_profit) / p_staked if p_staked else np.nan,
-                                "bankroll_end": bankroll, "blend_a": predictor.blend.a, "blend_b": predictor.blend.b,
-                                "pl_temperature": predictor.temperature.temperature})
-        bets = pd.DataFrame(bet_rows)
-        daily = pd.DataFrame(daily_rows)
-        periods = pd.DataFrame(period_rows)
-        return bets, daily, periods
+                                         "bankroll_after": bank})
+                daily_rows.append({"race_date": day, "bankroll": bank, "ret": bank / day_start - 1.0})
+            period_rows.append({"period_start": p_start, "period_end": p_end, "n_bets": p_bets, "staked": p_staked,
+                                "profit": p_profit, "recovery_rate": (p_staked + p_profit) / p_staked if p_staked else np.nan,
+                                "bankroll_end": bank, "blend_a": float(period_pred["blend_a"].iloc[0]),
+                                "blend_b": float(period_pred["blend_b"].iloc[0]),
+                                "pl_temperature": float(period_pred["pl_temperature"].iloc[0])})
+        return pd.DataFrame(bet_rows), pd.DataFrame(daily_rows), pd.DataFrame(period_rows)
+
+    def run(self, start: pd.Timestamp, end: pd.Timestamp):
+        """Convenience: generate walk-forward predictions, then paper-bet them."""
+        return self.simulate(self.generate_predictions(start, end))
 
 
 @click.command()
@@ -138,7 +177,8 @@ def main(data_path, start_date, end_date, bankroll, alpha, ev_threshold, retrain
                                retrain_months=retrain_months, calib_months=calib_months, odds_haircut=odds_haircut,
                                market_blend=market_blend, compound=compound)
     start, end = pd.Timestamp(start_date), pd.Timestamp(end_date)
-    bets, daily, periods = sim.run(start, end)
+    pred = sim.generate_predictions(start, end)
+    bets, daily, periods = sim.simulate(pred)
     summary = summarize(bets, daily, bankroll)
     summary["policy"] = policy.__dict__
     summary["odds_haircut"] = odds_haircut
@@ -150,6 +190,7 @@ def main(data_path, start_date, end_date, bankroll, alpha, ev_threshold, retrain
     bets.to_csv(out / "bets.csv", index=False)
     daily.to_csv(out / "equity_curve.csv", index=False)
     periods.to_csv(out / "periods.csv", index=False)
+    pred.to_csv(out / "wf_predictions.csv", index=False)
     (out / "summary.json").write_text(json.dumps(summary, indent=2, default=str))
 
     click.echo("=" * 72)

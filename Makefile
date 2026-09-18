@@ -21,3 +21,6 @@ test:
 
 clean:
 	rm -rf processed/*.csv artifacts/*.txt artifacts/*.pkl artifacts/*.json backtest_results/
+
+sweep:
+	$(PY) src/backtest/sweep.py --start_date 2021-01-01 --end_date 2023-12-31 --holdout_start 2023-04-01

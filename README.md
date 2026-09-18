@@ -35,6 +35,7 @@ pip install -r requirements.txt
 | 2 学習・較正 | `python src/models/train_lgbm.py --data processed/train.csv --model_dir artifacts/` |
 | 3 Kelly 計算 | `python src/betting/kelly_calculator.py --prob 0.15 --odds 10.0 --alpha 0.1` |
 | 4 バックテスト | `python src/backtest/simulator.py --start_date 2022-01-01 --end_date 2023-12-31` |
+| 4b パラメータ探索 | `python src/backtest/sweep.py --start_date 2021-01-01 --end_date 2023-12-31 --holdout_start 2023-04-01` |
 | 推論 | `python src/models/predict.py --data processed/train.csv --model_dir artifacts/` |
 | テスト | `python -m pytest tests/ -q` |
 | 全部 | `make all` |
@@ -55,10 +56,28 @@ pip install -r requirements.txt
 | `--no_market_blend` | – | Benter 型の市場ブレンドを無効化 (純粋モデル確率で賭ける) |
 | `--max_stake_yen` | 1,000,000 | 流動性キャップ (1 点あたり上限) |
 
+## パラメータ探索 (Phase 4b)
+
+EV 閾値と Kelly 係数をウォークフォワードで探索します。ウォークフォワード予測は**一度だけ**生成してグリッド全体で使い回すため、
+モデル再学習は 108 通りの組み合わせでも 1 回分で済みます。探索期間で選んだパラメータを、グリッドが一度も見ていないホールドアウト期間で再評価し、
+両者の差を必ず表示します。ドローダウン上限 (`--max_dd`) とベット数下限 (`--min_bets`) を満たさない組み合わせは、利益に関わらず失格にします。
+
+合成データでの探索結果 (2021-01〜2023-03 で探索、2023-04〜2023-12 で検証):
+
+| 指標 | 探索期間 | ホールドアウト |
+|---|---|---|
+| 回収率 | 140.3% | 115.4% |
+| 最大ドローダウン | 6.0% | 4.3% |
+| シャープレシオ | 2.74 | 1.92 |
+
+選ばれたのは α=0.02、EV≥1.30、1レース1点でした。α を 0.02 から 0.25 に上げると収益は増えますが、
+最大ドローダウンは 6% から 52.5% へと収益より速く悪化します。これが Fractional Kelly を採用する理由です。
+
 ## 出力
 
 - `artifacts/`: `ranker.txt`, `calibrator.pkl`, `pl_temperature.json`, `market_blend.json`, `metrics.json`, `feature_importance.csv`
-- `backtest_results/`: `bets.csv`, `equity_curve.csv`, `periods.csv`, `summary.json`
+- `backtest_results/`: `bets.csv`, `equity_curve.csv`, `periods.csv`, `summary.json`, `wf_predictions.csv`
+- `backtest_results/sweep/`: `sweep_grid.csv`, `sweep_summary.json`
 
 ## 重要な注意
 

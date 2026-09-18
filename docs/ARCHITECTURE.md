@@ -12,7 +12,7 @@
 | 較正 | `src/models/calibration.py` (Isotonic) | なし |
 | 市場ブレンド | `src/models/market_blend.py` (Benter 条件付きロジット) | なし |
 | 資金管理 | `src/betting/kelly_calculator.py`, `src/betting/strategy.py` | なし |
-| 検証 | `src/backtest/simulator.py`, `src/backtest/metrics.py` | なし |
+| 検証 | `src/backtest/simulator.py`, `src/backtest/sweep.py`, `src/backtest/metrics.py` | なし |
 | 競技定数 | `src/common/sport.py` (`SportSpec`: 競馬 18 頭 / 競輪 9 車 / 競艇 6 艇) | 定義のみ |
 
 ## 2. リーク防止の仕組み
@@ -59,7 +59,26 @@ p_i ∝ exp(a·log p_model_i + b·log p_market_i)         # Benter ブレンド 
 期間ごとにランカーを再学習し、直近 `calib_months` を early stopping・温度・較正・ブレンドの推定に使う。
 ベット額は各レース直前の残高で決める (`--no_compound` で初期残高固定)。
 
-## 6. 競輪・競艇への拡張手順
+## 6. 2 段階シミュレータとパラメータ探索
+
+`WalkForwardSimulator` は意図的に 2 段階に分かれている。
+
+| 段階 | メソッド | 依存するもの | コスト |
+|---|---|---|---|
+| 予測生成 | `generate_predictions` | データと再学習スケジュールのみ (ベット方針に非依存) | 高い (期間ごとに再学習) |
+| ベット精算 | `simulate` | ベット方針 (`BetPolicy`) | 低い |
+
+この分離により、`sweep.py` は予測を 1 回生成するだけで 100 通り以上のポリシーを評価できる。
+また「予測がベット方針に依存しない」という性質自体が、パラメータ探索によるリークを構造的に防いでいる。
+
+探索は次の順序で行う。
+
+1. 期間全体を探索部とホールドアウト部に時系列分割する。
+2. 探索部のみでグリッドを評価し、`--max_dd` / `--min_bets` を満たさない点を失格にする。
+3. 残った中から目的関数 (シャープレシオ / 対数成長率 / 回収率) で 1 点を選ぶ。
+4. 選んだ 1 点をホールドアウト部で再評価し、探索部との差を必ず出力する。
+
+## 7. 競輪・競艇への拡張手順
 
 1. `src/data/sources/keirin_csv.py` などに `DataSource` を実装し、`races` / `entries` を返す
    (`entrant_id` = 選手登録番号、`jockey_id` / `trainer_id` は `entrant_id` と同じ値でよい)。

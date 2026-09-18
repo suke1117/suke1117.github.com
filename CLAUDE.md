@@ -21,7 +21,7 @@ src/
   data/        データ取得層 (sources/) と特徴量エンジニアリング (features.py), preprocess.py CLI
   models/      LightGBM ランカー, Plackett-Luce, Isotonic 較正, train_lgbm.py CLI, predict.py
   betting/     Kelly 計算 (kelly_calculator.py CLI), ベット選択戦略 (strategy.py)
-  backtest/    ウォークフォワード・ペーパーベッティング simulator.py CLI, metrics.py
+  backtest/    ウォークフォワード・ペーパーベッティング simulator.py CLI, パラメータ探索 sweep.py CLI, metrics.py
 tests/         pytest (リーク検査・確率整合性・Kelly 制約を含む)
 raw_data/      JRA-VAN CSV エクスポート置き場 (git 管理外)
 processed/     前処理済み特徴量 (git 管理外)
@@ -61,6 +61,11 @@ artifacts/     学習済みモデル・較正器 (git 管理外)
 - **Phase 4: Walk-Forward Backtester (Paper Betting Module)**
   - 過去データを時系列で進めながら、実際のオッズデータと照らし合わせて資金増減をシミュレーションするモジュール。回収率、最大ドローダウン、シャープレシオを出力する。
   - Test Command: `python src/backtest/simulator.py --start_date 2022-01-01 --end_date 2023-12-31`
+
+- **Phase 4b: Betting Parameter Search**
+  - EV 閾値と Kelly 係数のウォークフォワード探索。予測は 1 回だけ生成してグリッドで使い回す。
+    探索期間とホールドアウト期間を分け、両者の成績差を必ず報告する。
+  - Test Command: `python src/backtest/sweep.py --start_date 2021-01-01 --end_date 2023-12-31 --holdout_start 2023-04-01`
 
 ### Unit Tests
 
