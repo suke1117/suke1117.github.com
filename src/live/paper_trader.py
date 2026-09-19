@@ -42,13 +42,24 @@ from src.data.schema import DEFAULT_ORGANIZER, RESULT_COLUMNS  # noqa: E402
 from src.live.explain import explain_day, runner_label, write_day  # noqa: E402
 from src.live.ledger import Ledger, PaperBet  # noqa: E402
 from src.live.providers import ProviderError, get_provider  # noqa: E402
-from src.live.providers.base import CARD_RACE_COLUMNS, OPTIONAL_CARD_RACE_COLUMNS  # noqa: E402
+from src.live.providers.base import (CARD_RACE_COLUMNS, OPTIONAL_CARD_ENTRY_COLUMNS,  # noqa: E402
+                                     OPTIONAL_CARD_RACE_COLUMNS)
 from src.models.predict import Predictor  # noqa: E402
 
 log = get_logger("paper")
 
 LEDGER_PATH = "live_data/ledger.jsonl"
-SLIP_DIR = "live_data/slips"
+def _slip_dir(live_root: str) -> Path:
+    """Slips and explained days live under the same root as the cards.
+
+    Otherwise two books run side by side (JRA and 地方, or a test against the
+    real one) write their slips into the same file and overwrite each other.
+    """
+    return Path(live_root) / "slips"
+
+
+def _archive_dir(live_root: str) -> Path:
+    return Path(live_root) / "explained"
 
 
 def _provider(name: str, processed: str, root: str, config: str):
@@ -126,6 +137,13 @@ def build_today(history: Tuple[pd.DataFrame, pd.DataFrame], races_today: pd.Data
     out = table[table["race_date"] == date].copy()
     if out.empty:
         raise click.ClickException(f"the card for {date:%Y-%m-%d} produced no feature rows")
+
+    # Names are display-only, so today's card keeps its own even when the
+    # history has none - which is the normal case, since a history export and a
+    # daily card rarely come from the same place.
+    names = [c for c in OPTIONAL_CARD_ENTRY_COLUMNS if c in today.columns and c not in out.columns]
+    if names:
+        out = out.merge(today[["race_id", "entrant_id", *names]], on=["race_id", "entrant_id"], how="left")
     return out
 
 
@@ -305,7 +323,7 @@ def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, 
 
     payload = slip_payload(date, prov.name, priced, races_today, bets, policy, policy_source, bank,
                            max_daily_exposure)
-    slip_path = Path(SLIP_DIR) / f"{date:%Y-%m-%d}.json"
+    slip_path = _slip_dir(live_root) / f"{date:%Y-%m-%d}.json"
     slip_path.parent.mkdir(parents=True, exist_ok=True)
     slip_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -315,7 +333,7 @@ def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, 
     from src.models.predict import Predictor as _P
 
     explained = explain_day(priced, _P.load(Path(model_dir)), policy, bank, with_result=False)
-    explained_path = write_day(explained)
+    explained_path = write_day(explained, str(_archive_dir(live_root)))
     if not dry_run:
         led.place(bets)
 
@@ -332,11 +350,11 @@ def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, 
     else:
         label_of = {(r["race_id"], x["entrant_id"]): x["label"]
                     for r in payload["races"] for x in r["runners"]}
-        click.echo(f"{'race':<14}{'runner':<20}{'odds':>7}{'p':>8}{'EV':>7}{'stake':>10}")
+        click.echo(f"{'race':<16}  {'runner':<22}{'odds':>7}{'p':>8}{'EV':>7}{'stake':>10}")
         for b in bets:
             shown = " + ".join(label_of.get((b.race_id, leg), leg)
                                for leg in str(b.entrant_id).split("+"))
-            click.echo(f"{b.race_id:<14}{shown:<20}{b.odds_at_bet:>7.1f}{b.prob:>8.3f}{b.ev:>7.3f}"
+            click.echo(f"{b.race_id:<16}  {shown:<22}{b.odds_at_bet:>7.1f}{b.prob:>8.3f}{b.ev:>7.3f}"
                        f"{b.stake:>10,.0f}")
         click.echo("-" * 74)
         click.echo(f"{len(bets)} bets on {s['n_races_bet']}/{s['n_races']} races, "

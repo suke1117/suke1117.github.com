@@ -252,3 +252,79 @@ def test_a_multi_leg_ticket_still_counts_as_a_bet_on_its_race():
     assert by_id["R2"]["n_bets"] == 1
     staked = {x["entrant_id"]: x["stake"] for x in by_id["R2"]["runners"]}
     assert staked == {"H3": 400.0, "H4": 400.0}
+
+
+def test_a_second_book_does_not_overwrite_the_first_ones_slips(tmp_path):
+    """--live_root chose where cards were read from but not where slips went.
+
+    Running a 地方 book beside a JRA one, or a test beside the real account,
+    wrote both days into live_data/slips/<date>.json and the second erased the
+    first - including the explained day the 予想 page reads.
+    """
+    from src.live.paper_trader import _archive_dir, _slip_dir
+
+    a, b = tmp_path / "jra", tmp_path / "nar"
+    assert _slip_dir(str(a)) != _slip_dir(str(b))
+    assert _archive_dir(str(a)) != _archive_dir(str(b))
+    assert _slip_dir(str(a)) == a / "slips"
+    assert _archive_dir(str(a)) == a / "explained"
+
+
+def test_todays_card_keeps_its_names_when_the_history_has_none(processed_dir):
+    """A history export and a daily card rarely come from the same place.
+
+    Names are display-only, so dropping them because the *history* lacks the
+    column left every screen saying "1番" on a card that had 馬名 in it.
+    """
+    prov = DemoProvider(str(processed_dir))
+    day = prov.latest_date()
+    races_today, entries_today = prov.fetch_card(day)
+    entries_today = entries_today.assign(
+        entrant_name=["ウマ" + str(i) for i in range(len(entries_today))])
+    odds = prov.fetch_odds(day)
+    hist = (pd.read_csv(processed_dir / "races.csv", dtype={"race_id": str}, parse_dates=["race_date"]),
+            pd.read_csv(processed_dir / "entries.csv", dtype={"race_id": str, "entrant_id": str,
+                                                              "jockey_id": str, "trainer_id": str},
+                        parse_dates=["race_date"]))
+    assert "entrant_name" not in hist[1].columns
+
+    today = build_today(hist, races_today, entries_today, odds, day)
+    assert "entrant_name" in today.columns
+    assert today["entrant_name"].notna().all()
+
+
+def test_a_card_with_foreign_headers_is_wired_by_a_mapping_file(tmp_path):
+    """Retyping tomorrow's card because the headers differ stops it being used."""
+    (tmp_path / "cards").mkdir()
+    (tmp_path / "odds").mkdir()
+    pd.DataFrame({
+        "race_id": ["R1", "R1"], "race_date": ["2024-02-03"] * 2, "venue": ["05"] * 2,
+        "race_no": [1, 1], "distance_m": [1600, 1600], "トラック": ["芝", "芝"],
+        "馬場状態": ["良", "良"], "race_class": ["1勝"] * 2,
+        "馬ID": ["H1", "H2"], "馬番": [1, 2], "draw": [1, 2], "騎手ID": ["J1", "J2"],
+        "trainer_id": ["T1", "T2"], "age": [4, 5], "sex": ["牡", "牝"],
+        "weight_carried": [55.0, 54.0], "body_weight": [480.0, 462.0],
+        "body_weight_diff": [0.0, -2.0], "馬名": ["ウマA", "ウマB"],
+    }).to_csv(tmp_path / "cards" / "2024-02-03.csv", index=False)
+    pd.DataFrame({"race_id": ["R1", "R1"], "馬ID": ["H1", "H2"],
+                  "win_odds": [2.4, 5.1]}).to_csv(tmp_path / "odds" / "2024-02-03.csv", index=False)
+    (tmp_path / "mapping.yml").write_text(
+        "entries:\n  馬ID: entrant_id\n  馬番: post_position\n  騎手ID: jockey_id\n"
+        "  馬名: entrant_name\nraces:\n  トラック: surface\n  馬場状態: going\n", encoding="utf-8")
+
+    races, entries = CsvCardProvider(str(tmp_path)).fetch_card(pd.Timestamp("2024-02-03"))
+    assert list(races["surface"]) == ["turf"]          # 芝 translates with no mapping entry
+    assert list(races["going"]) == ["good"]
+    assert list(entries["entrant_id"]) == ["H1", "H2"]
+    assert list(entries["entrant_name"]) == ["ウマA", "ウマB"]
+    odds = CsvCardProvider(str(tmp_path)).fetch_odds(pd.Timestamp("2024-02-03"))
+    assert list(odds["entrant_id"]) == ["H1", "H2"]
+
+
+def test_a_card_missing_a_column_says_which_headers_it_did_find(tmp_path):
+    (tmp_path / "cards").mkdir()
+    pd.DataFrame({"race_id": ["R1"], "馬ID": ["H1"]}).to_csv(
+        tmp_path / "cards" / "2024-02-03.csv", index=False)
+    with pytest.raises(ProviderError) as exc:
+        CsvCardProvider(str(tmp_path)).fetch_card(pd.Timestamp("2024-02-03"))
+    assert "mapping.yml" in str(exc.value) and "馬ID" in str(exc.value)
