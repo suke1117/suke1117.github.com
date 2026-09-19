@@ -88,6 +88,27 @@ def odds_breakdown(bets: pd.DataFrame) -> List[Dict]:
     return rows
 
 
+def _data_note(meta: Dict) -> str:
+    if meta.get("is_synthetic", True):
+        return ("合成データによるデモです。実際のレース結果・オッズではありません。"
+                "エッジの大きさは生成器の設定で決まるため、実運用の成績を示すものではありません。")
+    return "実データによる結果です。"
+
+
+def ticket_breakdown(bets: pd.DataFrame) -> List[Dict]:
+    """Where the money came from, by ticket type."""
+    if bets.empty or "bet_type" not in bets.columns:
+        return []
+    rows = []
+    for t, g in bets.groupby("bet_type", sort=True):
+        staked, profit = float(g["stake"].sum()), float(g["profit"].sum())
+        rows.append({"ticket": t, "n_bets": int(len(g)), "hit_rate": _num(g["won"].mean()),
+                     "avg_odds": _num(g["odds"].mean()), "avg_ev": _num(g["ev"].mean()),
+                     "staked": _num(staked), "profit": _num(profit),
+                     "recovery": _num((staked + profit) / staked if staked else np.nan)})
+    return sorted(rows, key=lambda r: -(r["staked"] or 0))
+
+
 def period_rows(periods: pd.DataFrame) -> List[Dict]:
     if periods.empty:
         return []
@@ -221,14 +242,19 @@ def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, o
 
     payload = {
         "generated_at": pd.Timestamp.now("UTC").strftime("%Y-%m-%d %H:%M UTC"),
-        "data_note": data_note or (
-            "合成データによるデモです。実オッズ・実レースの成績ではありません。" if processed_meta.get("source") == "SyntheticSource"
-            else "実データによる結果です。"),
-        "is_synthetic": processed_meta.get("source") == "SyntheticSource",
+        "data_note": data_note or _data_note(processed_meta),
+        # If preprocess did not say, assume synthetic: claiming real results
+        # from generated data is a far worse error than the reverse.
+        "is_synthetic": bool(processed_meta.get("is_synthetic", True)),
         "dataset": {"source": processed_meta.get("source"), "n_races": processed_meta.get("n_races"),
                     "n_rows": processed_meta.get("n_rows"), "date_min": processed_meta.get("date_min"),
                     "date_max": processed_meta.get("date_max"),
                     "n_features": len(processed_meta.get("feature_columns", []))},
+        "significance": {"recovery_ci": summary.get("recovery_ci"), "recovery_per_bet": _num(summary.get("recovery_per_bet")),
+                         "recovery_per_bet_ci": summary.get("recovery_per_bet_ci"),
+                         "t_stat": _num(summary.get("per_bet_t_stat")), "per_bet_sd": _num(summary.get("per_bet_sd")),
+                         "significant_at_95": bool(summary.get("significant_at_95")),
+                         "bets_needed_for_15pt_edge": _num(summary.get("bets_needed_for_15pt_edge"))},
         "kpi": {k: _num(summary.get(k)) for k in ("roi_recovery_rate", "max_drawdown", "sharpe_daily_annualised",
                                                   "hit_rate", "total_return", "final_bankroll", "start_bankroll",
                                                   "total_staked", "total_profit", "avg_odds_bet", "avg_ev_bet",
@@ -242,6 +268,7 @@ def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, o
         "equity": equity_series(daily),
         "monthly": monthly_series(bets),
         "odds_bands": odds_breakdown(bets),
+        "tickets": ticket_breakdown(bets),
         "periods": period_rows(periods),
         "model": model_block(metrics),
         "features": [{"name": str(i), "gain": _num(g)} for i, g in features["gain"].head(15).items()]

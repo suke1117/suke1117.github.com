@@ -854,9 +854,13 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     const head = el("header");
     const brand = el("div", { class: "brand" });
     brand.appendChild(el("div", { class: "eyebrow", text: "EquineAlpha · ウォークフォワード検証" }));
-    brand.appendChild(el("h1", { text: "単勝ペーパーベッティング成績" }));
+    const TICKET_JA = { win: "単勝", place: "複勝", quinella: "馬連" };
+    const ticketNames = (D.tickets || []).map(t => TICKET_JA[t.ticket] || t.ticket);
+    brand.appendChild(el("h1", { text: (ticketNames.length ? ticketNames.join("・") : "単勝") + "ペーパーベッティング成績" }));
     brand.appendChild(el("div", { class: "sub", text:
-      "LightGBM の順位学習で着順を予測し、Plackett-Luce で勝率に変換、Isotonic 回帰で較正した確率を市場オッズと突き合わせ、期待値が閾値を超えた馬にだけ Fractional Kelly で賭けた結果です。" }));
+      "LightGBM の順位学習で着順を予測し、Plackett-Luce で勝率に変換、Isotonic 回帰で較正した確率を市場オッズと" +
+      "突き合わせ、期待値が閾値を超えた買い目にだけ Fractional Kelly で賭けた結果です。" +
+      (ticketNames.length > 1 ? "2 着以降の確率にはべき乗ディスカウント補正を通しています。" : "") }));
     head.appendChild(brand);
     const right = el("div", { class: "brand" });
     right.appendChild(el("div", { class: "meta", html:
@@ -887,7 +891,12 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       else if (note) d.appendChild(el("div", { class: "note", text: note }));
       return d;
     };
-    const hero = tile("回収率", F.pct(rec), null, [rec > 1 ? "good" : "bad", rec > 1 ? "控除率を上回る" : "控除率に負けている"]);
+    const SG = D.significance || {};
+    const ci = SG.recovery_ci || {};
+    const hero = tile("回収率", F.pct(rec), null,
+      [SG.significant_at_95 ? "good" : "warn",
+       ci.lo == null ? (rec > 1 ? "控除率を上回る" : "控除率に負けている")
+                     : `95%区間 ${F.pct(ci.lo)} 〜 ${F.pct(ci.hi)}`]);
     hero.className = "kpi hero";
     kp.appendChild(hero);
     kp.appendChild(tile("最大ドローダウン", F.pct(dd), null, [ddState, ddState === "good" ? "抑制できている" : ddState === "warn" ? "許容範囲" : "要調整"]));
@@ -895,7 +904,10 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     kp.appendChild(tile("的中率", F.pct(K.hit_rate), `平均 ${F.fx(K.avg_odds_bet, 1)} 倍で購入`));
     kp.appendChild(tile("購入点数", F.num(K.n_bets), `${F.num(K.n_races_bet)} レース / ${F.num(K.n_race_days)} 開催日`));
     kp.appendChild(tile("最終資金", F.yen(K.final_bankroll), `元手 ${F.yen(K.start_bankroll)}`));
-    kp.appendChild(tile("平均期待値", F.fx(K.avg_ev_bet), `閾値 ${F.fx(P.ev_threshold)} を超えた馬だけ購入`));
+    const pci = SG.recovery_per_bet_ci || {};
+    kp.appendChild(tile("回収率 (1点等重み)", SG.recovery_per_bet == null ? "—" : F.pct(SG.recovery_per_bet),
+      pci.lo == null ? `平均期待値 ${F.fx(K.avg_ev_bet)}`
+                     : `${F.pct(pci.lo)} 〜 ${F.pct(pci.hi)}  t=${F.fx(SG.t_stat)}`));
     add(kp);
 
     page("roadmap");
@@ -909,7 +921,10 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     const c1 = el("div", { class: "card" });
     c1.appendChild(el("h2", { text: "資産曲線" }));
     c1.appendChild(el("div", { class: "desc", text:
-      `開催日ごとの残高です。複利で賭けているため対数目盛で表示しています。投入総額 ${F.yen(K.total_staked)} に対して利益 ${F.yen(K.total_profit)}。` }));
+      (D.compound === false
+        ? `開催日ごとの残高です。賭け金は初期資金に対する定額で、複利にはしていません。`
+        : `開催日ごとの残高です。複利で賭けているため対数目盛で表示しています。`) +
+      `投入総額 ${F.yen(K.total_staked)} に対して利益 ${F.yen(K.total_profit)}。` }));
     const h1 = el("div", { class: "chart" }); c1.appendChild(h1);
     add(c1);
     lineChart(h1, {
@@ -1130,6 +1145,36 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         fmtY: v => (v * 100).toFixed(0) + "%",
         tip: d => `<b>${d.m.month}</b><br><span class="k">回収率</span>${F.pct(d.m.recovery)}<br><span class="k">損益</span>${F.yen(d.m.profit)}<br><span class="k">点数</span>${F.num(d.m.n_bets)}`,
       });
+    }
+
+    /* ticket types */
+    if ((D.tickets || []).length > 1) {
+      const ck = el("div", { class: "card" });
+      ck.appendChild(el("h2", { text: "券種別の成績" }));
+      ck.appendChild(el("div", { class: "desc", text:
+        "単勝以外は、1 着確率から 2 着以降を導く部分の精度がそのまま効きます。素の Plackett-Luce は強い馬の連対率を" +
+        "過大評価するため、べき乗ディスカウントで補正した確率を使っています。" }));
+      const tw = el("div", { class: "tw" });
+      const t = el("table");
+      const maxRec = Math.max(...D.tickets.map(r => r.recovery || 0));
+      const NAME = { win: "単勝", place: "複勝", quinella: "馬連" };
+      t.innerHTML = "<thead><tr><th>券種</th><th>点数</th><th>平均オッズ</th><th>平均期待値</th><th>的中率</th>" +
+        "<th>回収率</th><th>損益</th></tr></thead><tbody>" + D.tickets.map(r => {
+          const w = r.recovery ? Math.max(0, Math.min(100, (r.recovery / maxRec) * 100)) : 0;
+          const col = (r.recovery || 0) >= 1 ? css("--s1") : css("--critical");
+          return `<tr><td>${NAME[r.ticket] || r.ticket}</td><td class="num">${F.num(r.n_bets)}</td>` +
+            `<td class="num">${F.fx(r.avg_odds, 1)}</td><td class="num">${F.fx(r.avg_ev, 3)}</td>` +
+            `<td class="num">${F.pct(r.hit_rate)}</td>` +
+            `<td class="num bar-cell"><span class="fill" style="width:${w}%;background:${col}"></span>` +
+            `<span>${F.pct(r.recovery)}</span></td>` +
+            `<td class="num" style="color:${(r.profit || 0) >= 0 ? "var(--good-ink)" : "var(--critical-ink)"}">` +
+            `${F.yen(r.profit)}</td></tr>`;
+        }).join("") + "</tbody>";
+      t.appendChild(el("caption", { text:
+        "合成データでは大衆が複数券種を素の Harville で値付けする設定にしてあるため、複勝と馬連の回収率は" +
+        "その設定の写しです。実際のプールに同じ歪みがあるかは実データでしか分かりません。" }));
+      tw.appendChild(t); ck.appendChild(tw);
+      add(ck);
     }
 
     /* odds bands */

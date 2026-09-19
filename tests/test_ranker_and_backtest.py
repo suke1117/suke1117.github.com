@@ -93,9 +93,31 @@ def test_metrics():
     eq = np.array([100, 120, 90, 95, 130])
     assert np.isclose(max_drawdown(eq), 0.25)
     assert sharpe_ratio(np.array([0.01, 0.01, 0.01])) == 0.0
-    bets = pd.DataFrame({"race_id": ["a", "b"], "stake": [100.0, 100.0], "profit": [300.0, -100.0], "odds": [4.0, 3.0],
+    bets = pd.DataFrame({"race_id": ["a", "b"], "race_date": pd.to_datetime(["2022-01-01", "2022-01-02"]),
+                         "stake": [100.0, 100.0], "profit": [300.0, -100.0], "odds": [4.0, 3.0],
                          "ev": [1.2, 1.1], "fraction": [0.01, 0.01]})
     daily = pd.DataFrame({"race_date": pd.to_datetime(["2022-01-01", "2022-01-02"]), "bankroll": [1300.0, 1200.0],
                           "ret": [0.3, -1 / 13]})
-    s = summarize(bets, daily, 1000.0)
+    s = summarize(bets, daily, 1000.0, n_boot=200)
     assert np.isclose(s["roi_recovery_rate"], 2.0) and s["n_bets"] == 2 and s["hit_rate"] == 0.5
+    assert np.isclose(s["recovery_per_bet"], 2.0)
+
+
+def test_an_interval_is_withheld_rather_than_faked_without_dates():
+    """Resampling individual bets would give a narrow, flattering interval."""
+    from src.backtest.metrics import block_bootstrap, stake_weighted_recovery
+
+    bets = pd.DataFrame({"race_id": list("abcdef"), "stake": [100.0] * 6,
+                         "profit": [300.0, -100.0, -100.0, 500.0, -100.0, -100.0]})
+    ci = block_bootstrap(bets, stake_weighted_recovery, 200)
+    assert ci["lo"] is None and "race_date" in ci["reason"]
+
+
+def test_the_two_recovery_rates_diverge_when_stakes_do():
+    """Stake weighting rewards being lucky while betting big; per-bet does not."""
+    from src.backtest.metrics import per_bet_recovery, stake_weighted_recovery
+
+    arr = np.array([[100.0, -100.0], [10000.0, 30000.0]])   # small loss, large win
+    assert stake_weighted_recovery(arr) > per_bet_recovery(arr)
+    even = np.array([[100.0, -100.0], [100.0, 300.0]])
+    assert stake_weighted_recovery(even) == pytest.approx(per_bet_recovery(even))

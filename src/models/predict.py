@@ -25,7 +25,7 @@ import pandas as pd  # noqa: E402
 
 from src.models.calibration import WinProbCalibrator  # noqa: E402
 from src.models.market_blend import MarketBlend  # noqa: E402
-from src.models.plackett_luce import PLTemperature, race_win_probs_from_scores  # noqa: E402
+from src.models.plackett_luce import PLTemperature, RunDownDiscount, race_win_probs_from_scores  # noqa: E402
 from src.models.ranker import RankerModel  # noqa: E402
 
 
@@ -35,6 +35,7 @@ class Predictor:
     temperature: PLTemperature
     calibrator: WinProbCalibrator
     blend: MarketBlend = field(default_factory=MarketBlend)
+    run_down: RunDownDiscount = field(default_factory=RunDownDiscount)
 
     def predict(self, df: pd.DataFrame, odds_col: str = "win_odds") -> pd.DataFrame:
         """Add ``score`` (ranker), ``p_win_raw`` (PL), ``p_win_model`` (calibrated) and ``p_win``.
@@ -56,6 +57,7 @@ class Predictor:
         (model_dir / "pl_temperature.json").write_text(json.dumps(self.temperature.to_dict()))
         self.calibrator.save(model_dir / "calibrator.pkl")
         self.blend.save(model_dir / "market_blend.json")
+        (model_dir / "run_down.json").write_text(json.dumps(self.run_down.to_dict()))
 
     @classmethod
     def load(cls, model_dir: Path) -> "Predictor":
@@ -65,6 +67,8 @@ class Predictor:
             temperature=PLTemperature.from_dict(json.loads((model_dir / "pl_temperature.json").read_text())),
             calibrator=WinProbCalibrator.load(model_dir / "calibrator.pkl"),
             blend=MarketBlend.load(model_dir / "market_blend.json"),
+            run_down=RunDownDiscount.from_dict(
+                json.loads((model_dir / "run_down.json").read_text()) if (model_dir / "run_down.json").exists() else {}),
         )
 
 

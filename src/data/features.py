@@ -31,6 +31,8 @@ import pandas as pd
 from src.data.schema import FORBIDDEN_FEATURE_COLUMNS
 
 CATEGORICAL_FEATURES = ["surface", "going", "race_class", "venue", "sex"]
+#: added only when the data actually spans more than one organization
+OPTIONAL_CATEGORICAL = ["organizer"]
 
 STATIC_FEATURES = [
     "distance_m", "n_runners", "post_position", "draw", "age", "weight_carried", "body_weight", "body_weight_diff",
@@ -304,6 +306,10 @@ def build_features(races: pd.DataFrame, entries: pd.DataFrame) -> Tuple[pd.DataF
         static[c] = pd.to_numeric(df[c], errors="coerce")
     for c in CATEGORICAL_FEATURES:
         static[c] = df[c].astype("category")
+    for c in OPTIONAL_CATEGORICAL:
+        # a constant column carries no information and would only cost a split
+        if c in df.columns and df[c].nunique(dropna=True) > 1:
+            static[c] = df[c].astype("category")
     emit("static", static)
 
     feats = pd.concat(blocks, axis=1)

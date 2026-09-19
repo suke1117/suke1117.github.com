@@ -31,7 +31,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from src.backtest.metrics import summarize  # noqa: E402
-from src.betting.strategy import BetPolicy, select_win_bets, settle_win_bet  # noqa: E402
+from src.betting.strategy import BetPolicy, select_bets, settle_bet  # noqa: E402
 from src.common.config import DEFAULT_BANKROLL_YEN, DEFAULT_EV_THRESHOLD, DEFAULT_KELLY_ALPHA, MAX_STAKE_YEN  # noqa: E402
 from src.common.logging_utils import get_logger  # noqa: E402
 from src.models.train_lgbm import fit_pipeline, load_table  # noqa: E402
@@ -39,8 +39,8 @@ from src.models.train_lgbm import fit_pipeline, load_table  # noqa: E402
 log = get_logger("backtest")
 
 #: columns carried from a predicted period into the betting stage
-PREDICTION_COLUMNS = ["race_date", "race_id", "entrant_id", "n_runners", "finish_position", "win_odds", "score",
-                      "p_win_raw", "p_win_model", "p_win"]
+PREDICTION_COLUMNS = ["race_date", "race_id", "entrant_id", "n_runners", "finish_position", "win_odds", "place_odds",
+                      "score", "p_win_raw", "p_win_model", "p_win"]
 
 
 def period_boundaries(start: pd.Timestamp, end: pd.Timestamp, months: int) -> List[pd.Timestamp]:
@@ -91,12 +91,14 @@ class WalkForwardSimulator:
             log.info("period %s..%s | train<%s (%d races) calib (%d) | predict %d races | blend a=%.2f b=%.2f",
                      p_start.date(), (p_end - pd.Timedelta(days=1)).date(), calib_start.date(), train["race_id"].nunique(),
                      calib["race_id"].nunique(), period["race_id"].nunique(), predictor.blend.a, predictor.blend.b)
-            pred = pred[PREDICTION_COLUMNS].copy()
+            pred = pred[[c for c in PREDICTION_COLUMNS if c in pred.columns]].copy()
             pred["period_start"] = p_start
             pred["period_end"] = p_end - pd.Timedelta(days=1)
             pred["blend_a"] = predictor.blend.a
             pred["blend_b"] = predictor.blend.b
             pred["pl_temperature"] = predictor.temperature.temperature
+            pred["run_down_lam"] = predictor.run_down.lam
+            pred["run_down_mu"] = predictor.run_down.mu
             frames.append(pred)
         if not frames:
             return pd.DataFrame(columns=PREDICTION_COLUMNS + ["period_start", "period_end", "blend_a", "blend_b",
@@ -123,21 +125,25 @@ class WalkForwardSimulator:
                 day_start = bank
                 for race_id, race in day_df.groupby("race_id", sort=True):
                     race = race.reset_index(drop=True)
-                    bets = select_win_bets(race, bank, policy,
-                                           sizing_bankroll=None if compound else start_bankroll)
+                    lam = float(race["run_down_lam"].iloc[0]) if "run_down_lam" in race else 1.0
+                    mu = float(race["run_down_mu"].iloc[0]) if "run_down_mu" in race else lam
+                    bets = select_bets(race, bank, policy, sizing_bankroll=None if compound else start_bankroll,
+                                       run_down=(lam, mu))
                     if not bets:
                         continue
-                    fp = dict(zip(race["entrant_id"], race["finish_position"]))
+                    fp = {str(k): int(v) for k, v in zip(race["entrant_id"], race["finish_position"])}
+                    n_runners = int(race["n_runners"].iloc[0]) if "n_runners" in race else len(race)
                     for b in bets:
                         payout_odds = 1.0 + (b.odds - 1.0) * (1.0 - self.odds_haircut)
-                        profit = settle_win_bet(b, int(fp[b.entrant_id]), payout_odds)
+                        profit = settle_bet(b, fp, n_runners, payout_odds)
                         bank += profit
                         p_bets += 1
                         p_profit += profit
                         p_staked += b.stake
-                        bet_rows.append({"race_date": day, "race_id": race_id, "entrant_id": b.entrant_id, "prob": b.prob,
-                                         "odds": b.odds, "payout_odds": payout_odds, "ev": b.ev, "fraction": b.fraction,
-                                         "stake": b.stake, "won": int(fp[b.entrant_id] == 1), "profit": profit,
+                        bet_rows.append({"race_date": day, "race_id": race_id, "entrant_id": b.entrant_id,
+                                         "bet_type": b.bet_type, "prob": b.prob, "odds": b.odds,
+                                         "payout_odds": payout_odds, "ev": b.ev, "fraction": b.fraction,
+                                         "stake": b.stake, "won": int(profit > 0), "profit": profit,
                                          "bankroll_after": bank})
                 daily_rows.append({"race_date": day, "bankroll": bank, "ret": bank / day_start - 1.0})
             period_rows.append({"period_start": p_start, "period_end": p_end, "n_bets": p_bets, "staked": p_staked,
@@ -163,16 +169,21 @@ class WalkForwardSimulator:
 @click.option("--calib_months", type=int, default=6, show_default=True)
 @click.option("--odds_haircut", type=float, default=0.05, show_default=True, help="payout shrink vs final odds")
 @click.option("--max_bets_per_race", type=int, default=3, show_default=True)
+@click.option("--tickets", default="win", show_default=True,
+              help="comma-separated ticket types: win, place, quinella")
+@click.option("--takeout", type=float, default=0.20, show_default=True,
+              help="used only to model a 馬連 pool from the win pool when real exotic odds are absent")
 @click.option("--market_blend/--no_market_blend", default=True, show_default=True)
 @click.option("--compound/--no_compound", default=True, show_default=True,
               help="size bets on the running bankroll (compound) or on the initial bankroll (flat)")
 @click.option("--max_stake_yen", type=float, default=MAX_STAKE_YEN, show_default=True, help="liquidity cap per ticket")
 @click.option("--output_dir", default="backtest_results/", show_default=True)
 def main(data_path, start_date, end_date, bankroll, alpha, ev_threshold, retrain_months, calib_months, odds_haircut,
-         max_bets_per_race, market_blend, compound, max_stake_yen, output_dir):
+         max_bets_per_race, tickets, takeout, market_blend, compound, max_stake_yen, output_dir):
     table, meta = load_table(data_path)
+    ticket_types = tuple(t.strip() for t in tickets.split(",") if t.strip())
     policy = BetPolicy(alpha=alpha, ev_threshold=ev_threshold, max_bets_per_race=max_bets_per_race,
-                       max_stake_yen=max_stake_yen)
+                       max_stake_yen=max_stake_yen, ticket_types=ticket_types, takeout=takeout)
     sim = WalkForwardSimulator(table, meta["feature_columns"], meta["categorical_columns"], policy, bankroll,
                                retrain_months=retrain_months, calib_months=calib_months, odds_haircut=odds_haircut,
                                market_blend=market_blend, compound=compound)
@@ -195,11 +206,29 @@ def main(data_path, start_date, end_date, bankroll, alpha, ev_threshold, retrain
 
     click.echo("=" * 72)
     click.echo(f"Paper betting {start_date} .. {end_date}   alpha={alpha} EV>={ev_threshold} haircut={odds_haircut} "
-               f"{'compound' if compound else 'flat'}")
+               f"{'compound' if compound else 'flat'}  券種 {'/'.join(ticket_types)}")
     click.echo("-" * 72)
     click.echo(f"bets: {summary['n_bets']}  races bet: {summary['n_races_bet']}  race days: {summary['n_race_days']}")
     click.echo(f"total staked: {summary['total_staked']:,.0f}  profit: {summary['total_profit']:,.0f}")
-    click.echo(f"回収率 (recovery rate): {summary['roi_recovery_rate']*100:.1f}%   hit rate: {summary['hit_rate']*100:.1f}%")
+    ci, pci = summary.get("recovery_ci") or {}, summary.get("recovery_per_bet_ci") or {}
+    def _band(v, c):
+        if c.get("lo") is None:
+            return f"{v * 100:.1f}%"
+        return f"{v * 100:.1f}%  [{c['lo'] * 100:.1f}%, {c['hi'] * 100:.1f}%]"
+    click.echo(f"回収率 投入額加重: {_band(summary['roi_recovery_rate'], ci)}")
+    click.echo(f"回収率 1点等重み: {_band(summary['recovery_per_bet'], pci)}   "
+               f"t={summary.get('per_bet_t_stat') or float('nan'):.2f}")
+    click.echo(f"損益分岐を下回る確率: {pci.get('p_le_1', float('nan')):.1%}   "
+               f"{'95%で有意' if summary.get('significant_at_95') else '95%では有意でない'}")
+    click.echo(f"hit rate: {summary['hit_rate']*100:.1f}%")
+    if len(bets) and "bet_type" in bets:
+        by = bets.groupby("bet_type").apply(
+            lambda g: pd.Series({"n": len(g), "staked": g["stake"].sum(), "profit": g["profit"].sum(),
+                                 "recovery": (g["stake"].sum() + g["profit"].sum()) / g["stake"].sum(),
+                                 "hit": (g["profit"] > 0).mean()}), include_groups=False)
+        click.echo("-" * 72)
+        click.echo("券種別: " + "  ".join(
+            f"{t} n={int(r['n'])} 回収率={r['recovery']*100:.1f}% 的中={r['hit']*100:.1f}%" for t, r in by.iterrows()))
     click.echo(f"bankroll: {bankroll:,.0f} -> {summary['final_bankroll']:,.0f}  ({summary['total_return']*100:+.1f}%)")
     click.echo(f"max drawdown: {summary['max_drawdown']*100:.2f}%   Sharpe (daily, annualised): {summary['sharpe_daily_annualised']:.2f}")
     if len(periods):

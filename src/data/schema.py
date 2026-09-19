@@ -27,6 +27,12 @@ RACE_COLUMNS: Dict[str, str] = {
     "n_runners": "int",
 }
 
+#: Optional race columns. ``organizer`` separates JRA from NAR (地方競馬): the
+#: two have different takeout, class ladders and field sizes, so a model trained
+#: on both needs to know which it is looking at.
+OPTIONAL_RACE_COLUMNS: Dict[str, str] = {"organizer": "str"}
+DEFAULT_ORGANIZER = "JRA"
+
 ENTRY_COLUMNS: Dict[str, str] = {
     "race_id": "str",
     "entrant_id": "str",       # 血統登録番号 (horse), 選手登録番号 (keirin/kyotei)

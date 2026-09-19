@@ -29,7 +29,7 @@ import click  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from src.betting.strategy import BetPolicy, select_win_bets  # noqa: E402
+from src.betting.strategy import BetPolicy, select_bets  # noqa: E402
 from src.common.config import (  # noqa: E402
     DEFAULT_BANKROLL_YEN,
     DEFAULT_EV_THRESHOLD,
@@ -68,7 +68,8 @@ def load_history(processed: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def default_policy(alpha: Optional[float], ev: Optional[float], max_bets: Optional[int],
-                   sweep_path: str = "backtest_results/sweep/sweep_summary.json") -> Tuple[BetPolicy, str]:
+                   sweep_path: str = "backtest_results/sweep/sweep_summary.json",
+                   ticket_types: Tuple[str, ...] = ("win",)) -> Tuple[BetPolicy, str]:
     """Use the parameters the walk-forward search selected, unless overridden."""
     chosen, source = {}, "defaults"
     p = Path(sweep_path)
@@ -82,6 +83,7 @@ def default_policy(alpha: Optional[float], ev: Optional[float], max_bets: Option
         alpha=alpha if alpha is not None else chosen.get("alpha") or DEFAULT_KELLY_ALPHA,
         ev_threshold=ev if ev is not None else chosen.get("ev_threshold") or DEFAULT_EV_THRESHOLD,
         max_bets_per_race=max_bets if max_bets is not None else chosen.get("max_bets_per_race") or 3,
+        ticket_types=ticket_types,
     )
     if any(v is not None for v in (alpha, ev, max_bets)):
         source = "command line" if source == "defaults" else "sweep + command line"
@@ -119,7 +121,8 @@ def build_today(history: Tuple[pd.DataFrame, pd.DataFrame], races_today: pd.Data
     return out
 
 
-def price_card(today: pd.DataFrame, model_dir: str) -> pd.DataFrame:
+def price_card(today: pd.DataFrame, model_dir: str):
+    """Returns (priced card, the fitted run-down discount used for exotic tickets)."""
     predictor = Predictor.load(Path(model_dir))
     need = [c for c in predictor.ranker.feature_cols if c not in today.columns]
     if need:
@@ -128,7 +131,7 @@ def price_card(today: pd.DataFrame, model_dir: str) -> pd.DataFrame:
             "Re-run preprocess and train so the model and the feature builder are the same version.")
     priced = predictor.predict(today)
     priced["ev"] = priced["p_win"] * priced["win_odds"]
-    return priced
+    return priced, (predictor.run_down.lam, predictor.run_down.mu)
 
 
 def slip_payload(date: pd.Timestamp, provider: str, priced: pd.DataFrame, races_today: pd.DataFrame,
@@ -157,7 +160,7 @@ def slip_payload(date: pd.Timestamp, provider: str, priced: pd.DataFrame, races_
         "bankroll": bankroll,
         "policy": {"alpha": policy.alpha, "ev_threshold": policy.ev_threshold,
                    "max_bets_per_race": policy.max_bets_per_race, "source": policy_source,
-                   "max_daily_exposure": max_daily_exposure},
+                   "max_daily_exposure": max_daily_exposure, "ticket_types": list(policy.ticket_types)},
         "summary": {"n_races": len(races), "n_races_bet": sum(1 for r in races if r["n_bets"]),
                     "n_bets": len(bets), "total_stake": sum(b.stake for b in bets),
                     "avg_ev": round(float(np.mean([b.ev for b in bets])), 4) if bets else None,
@@ -215,11 +218,12 @@ def template(date: str, live_root: str) -> None:
 @click.option("--max_bets_per_race", type=int, default=None)
 @click.option("--bankroll", type=float, default=None, help="override the ledger's current bankroll")
 @click.option("--start_bankroll", type=float, default=DEFAULT_BANKROLL_YEN, show_default=True)
+@click.option("--tickets", default="win", show_default=True, help="comma-separated: win, place, quinella")
 @click.option("--max_daily_exposure", type=float, default=MAX_DAILY_EXPOSURE, show_default=True,
               help="stop betting once this fraction of the bankroll is committed today")
 @click.option("--dry_run", is_flag=True, help="print the slip without writing it to the ledger")
 @with_common
-def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, bankroll, start_bankroll,
+def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, bankroll, start_bankroll, tickets,
         max_daily_exposure, dry_run, processed, live_root, provider_config, ledger_path):
     """Price today's card and record the bets the policy fires on."""
     try:
@@ -236,7 +240,8 @@ def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, 
             f"the ledger already has bets for {date:%Y-%m-%d}. Betting twice on one day would double the exposure; "
             "use --dry_run to re-price it.")
     bank = bankroll if bankroll is not None else led.available()
-    policy, policy_source = default_policy(alpha, ev_threshold, max_bets_per_race)
+    policy, policy_source = default_policy(alpha, ev_threshold, max_bets_per_race,
+                                           ticket_types=tuple(t.strip() for t in tickets.split(",") if t.strip()))
 
     try:
         races_today, entries_today = prov.fetch_card(date)
@@ -247,7 +252,7 @@ def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, 
              prov.name)
 
     today = build_today(load_history(processed), races_today, entries_today, odds, date)
-    priced = price_card(today, model_dir)
+    priced, run_down = price_card(today, model_dir)
 
     if not (0 < max_daily_exposure <= MAX_DAILY_EXPOSURE):
         raise click.BadParameter(f"must be in (0, {MAX_DAILY_EXPOSURE}]", param_hint="--max_daily_exposure")
@@ -261,7 +266,8 @@ def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, 
         race = race.dropna(subset=["win_odds"]).reset_index(drop=True)
         if race.empty:
             continue
-        for b in select_win_bets(race, running, policy):
+        lam, mu = run_down
+        for b in select_bets(race, running, policy, run_down=(lam, mu)):
             if committed + b.stake > daily_budget:
                 skipped += 1
                 continue

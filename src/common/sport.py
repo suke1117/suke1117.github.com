@@ -30,6 +30,19 @@ HORSE_RACING = SportSpec(
     bet_types=["win", "place", "quinella", "exacta", "trio", "trifecta"],
 )
 
+#: 地方競馬. Races on weekdays, almost year round, which is the point: weekly
+#: compounding is per-bet growth times bets per week, and JRA only runs two days.
+#: Pools are smaller, so the crowd prices less sharply and takeout is higher.
+NAR_RACING = SportSpec(
+    key="nar",
+    name_ja="地方競馬 (NAR)",
+    max_entrants=16,
+    min_entrants=6,
+    bet_unit_yen=100,
+    win_takeout=0.25,
+    bet_types=["win", "place", "quinella", "exacta", "trio", "trifecta"],
+)
+
 KEIRIN = SportSpec(
     key="keirin",
     name_ja="競輪",
@@ -50,7 +63,7 @@ KYOTEI = SportSpec(
     bet_types=["win", "quinella", "exacta", "trio", "trifecta"],
 )
 
-SPORTS: Dict[str, SportSpec] = {s.key: s for s in (HORSE_RACING, KEIRIN, KYOTEI)}
+SPORTS: Dict[str, SportSpec] = {s.key: s for s in (HORSE_RACING, NAR_RACING, KEIRIN, KYOTEI)}
 
 
 def get_sport(key: str) -> SportSpec:

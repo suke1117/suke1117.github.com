@@ -22,10 +22,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import click  # noqa: E402
 
 from src.common.logging_utils import get_logger  # noqa: E402
-from src.data.features import CATEGORICAL_FEATURES, assert_no_forbidden, build_features  # noqa: E402
-from src.data.sources import JRAVanCSVSource, SyntheticSource  # noqa: E402
+from src.data.features import (  # noqa: E402
+    CATEGORICAL_FEATURES,
+    OPTIONAL_CATEGORICAL,
+    assert_no_forbidden,
+    build_features,
+)
+from src.data.sources import CombinedSource, JRAVanCSVSource, SyntheticSource  # noqa: E402
 
 log = get_logger("preprocess")
+
+
+def _is_synthetic(source) -> bool:
+    """True if any part of the data was generated rather than observed."""
+    children = getattr(source, "sources", None)
+    if children:
+        return any(_is_synthetic(c) for c in children)
+    return isinstance(source, SyntheticSource)
 
 
 @click.command()
@@ -39,8 +52,10 @@ log = get_logger("preprocess")
               help="synthetic only: noise in the crowd's view of latent strength (lower = more efficient market)")
 @click.option("--public_form_weight", default=0.6, show_default=True, type=float,
               help="synthetic only: how much the crowd relies on past form (0..1)")
+@click.option("--include_nar/--jra_only", default=False, show_default=True,
+              help="synthetic only: also generate 地方競馬 (weekday racing), which multiplies the bets per week")
 def main(input_dir: str, output_dir: str, synthetic: bool, start: str, end: str, seed: int, public_noise: float,
-         public_form_weight: float) -> None:
+         public_form_weight: float, include_nar: bool) -> None:
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -50,8 +65,15 @@ def main(input_dir: str, output_dir: str, synthetic: bool, start: str, end: str,
     else:
         if not synthetic:
             log.warning("no RA*/SE* CSV found in %s -> generating synthetic data", input_dir)
-        source = SyntheticSource(start=start, end=end, seed=seed, public_noise=public_noise,
-                                 public_form_weight=public_form_weight)
+        jra = SyntheticSource(start=start, end=end, seed=seed, public_noise=public_noise,
+                              public_form_weight=public_form_weight, preset="jra")
+        if include_nar:
+            nar = SyntheticSource(start=start, end=end, seed=seed + 1, public_form_weight=public_form_weight,
+                                  preset="nar", n_horses=3200, n_jockeys=180, n_trainers=200)
+            source = CombinedSource([jra, nar])
+            log.info("generating JRA + 地方競馬")
+        else:
+            source = jra
 
     races, entries = source.load_validated()
     log.info("loaded %d races / %d entries (%s .. %s)", len(races), len(entries),
@@ -69,12 +91,20 @@ def main(input_dir: str, output_dir: str, synthetic: bool, start: str, end: str,
     entries.to_csv(out / "entries.csv", index=False)
     meta = {
         "feature_columns": feature_cols,
-        "categorical_columns": [c for c in CATEGORICAL_FEATURES if c in feature_cols],
+        # every categorical the builder actually emitted, including the optional
+        # ones: a categorical left out here reaches LightGBM as a raw string
+        "categorical_columns": [c for c in CATEGORICAL_FEATURES + OPTIONAL_CATEGORICAL if c in feature_cols],
         "n_rows": int(len(table)),
         "n_races": int(table["race_id"].nunique()),
         "date_min": str(table["race_date"].min().date()),
         "date_max": str(table["race_date"].max().date()),
         "source": type(source).__name__,
+        # Never infer this from the class name. A wrapper class silently turned
+        # "合成データによるデモ" into "実データによる結果です" on the dashboard,
+        # which is the worst thing this page can get wrong.
+        "is_synthetic": _is_synthetic(source),
+        "organizers": sorted(races["organizer"].dropna().unique().tolist()) if "organizer" in races else ["JRA"],
+        "race_days": int(races["race_date"].nunique()),
         "feature_groups": feature_groups,
     }
     (out / "features.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))

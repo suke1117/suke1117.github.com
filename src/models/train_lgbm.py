@@ -28,7 +28,7 @@ from src.common.config import LGBM_DEFAULT_PARAMS  # noqa: E402
 from src.common.logging_utils import get_logger  # noqa: E402
 from src.models.calibration import WinProbCalibrator, expected_calibration_error, reliability_table  # noqa: E402
 from src.models.market_blend import MarketBlend  # noqa: E402
-from src.models.plackett_luce import PLTemperature, race_win_probs_from_scores  # noqa: E402
+from src.models.plackett_luce import PLTemperature, RunDownDiscount, race_win_probs_from_scores  # noqa: E402
 from src.models.predict import Predictor  # noqa: E402
 from src.models.ranker import RankerModel  # noqa: E402
 
@@ -81,10 +81,36 @@ def fit_pipeline(train: pd.DataFrame, calib: pd.DataFrame, feature_cols, categor
     won = (calib["finish_position"] == 1).to_numpy()
     calibrator = WinProbCalibrator().fit(calib["p_win_raw"].to_numpy(), won)
     blend = MarketBlend()
+    p_model = calibrator.transform(calib["p_win_raw"].to_numpy(), calib["race_id"].to_numpy())
     if market_blend and "win_odds" in calib and calib["win_odds"].notna().all():
-        p_model = calibrator.transform(calib["p_win_raw"].to_numpy(), calib["race_id"].to_numpy())
         blend = MarketBlend.fit(p_model, calib["win_odds"].to_numpy(), calib["race_id"].to_numpy(), won)
-    return Predictor(ranker, temp, calibrator, blend)
+    run_down = _fit_run_down(calib.assign(_p=blend.transform(p_model, calib["win_odds"].to_numpy()
+                                                             if blend.enabled and "win_odds" in calib else None,
+                                                             calib["race_id"].to_numpy())))
+    return Predictor(ranker, temp, calibrator, blend, run_down)
+
+
+def _fit_run_down(calib: pd.DataFrame) -> RunDownDiscount:
+    """Fit the Stern / Henery stage discount on races whose 1-2-3 is known.
+
+    Plain Plackett-Luce assumes the race for second runs on the same strengths
+    as the race for first, which overstates a strong horse's place chance. The
+    fitted power corrects it, and every exotic probability depends on it.
+    """
+    probs, first, second, third = [], [], [], []
+    for _, g in calib.groupby("race_id", sort=False):
+        fp = g["finish_position"].to_numpy()
+        if g.shape[0] < 5 or not {1, 2, 3} <= set(fp.tolist()):
+            continue
+        pr = g["_p"].to_numpy(dtype=float)
+        total = pr.sum()
+        if not np.isfinite(total) or total <= 0:
+            continue
+        probs.append(pr / total)
+        first.append(int(np.flatnonzero(fp == 1)[0]))
+        second.append(int(np.flatnonzero(fp == 2)[0]))
+        third.append(int(np.flatnonzero(fp == 3)[0]))
+    return RunDownDiscount.fit(probs, first, second, third) if probs else RunDownDiscount()
 
 
 def evaluate(pred: pd.DataFrame) -> Dict:
@@ -139,9 +165,11 @@ def main(data_path: str, model_dir: str, train_end: Optional[str], calib_end: Op
              test["race_id"].nunique())
 
     predictor = fit_pipeline(train, calib, feature_cols, categorical_cols, market_blend=market_blend)
-    log.info("ranker best_iteration=%d  PL temperature=%.4f  calibrator n=%d  blend(a=%.3f, b=%.3f, enabled=%s)",
+    log.info("ranker best_iteration=%d  PL temperature=%.4f  calibrator n=%d  blend(a=%.3f, b=%.3f, enabled=%s)  "
+             "run-down(lam=%.3f, mu=%.3f, n=%d)",
              predictor.ranker.best_iteration, predictor.temperature.temperature, predictor.calibrator.n_fit,
-             predictor.blend.a, predictor.blend.b, predictor.blend.enabled)
+             predictor.blend.a, predictor.blend.b, predictor.blend.enabled,
+             predictor.run_down.lam, predictor.run_down.mu, predictor.run_down.n_races)
 
     out = Path(model_dir)
     predictor.save(out)
@@ -149,7 +177,7 @@ def main(data_path: str, model_dir: str, train_end: Optional[str], calib_end: Op
 
     metrics = {"split": {"train_end": str(train["race_date"].max().date()), "calib_end": str(calib["race_date"].max().date())},
                "best_iteration": predictor.ranker.best_iteration, "pl_temperature": predictor.temperature.temperature,
-               "market_blend": predictor.blend.to_dict()}
+               "market_blend": predictor.blend.to_dict(), "run_down": predictor.run_down.to_dict()}
     if len(test):
         metrics["test"] = evaluate(predictor.predict(test))
         t = metrics["test"]

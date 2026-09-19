@@ -35,6 +35,7 @@ pip install -r requirements.txt
 | 2 学習・較正 | `python src/models/train_lgbm.py --data processed/train.csv --model_dir artifacts/` |
 | 3 Kelly 計算 | `python src/betting/kelly_calculator.py --prob 0.15 --odds 10.0 --alpha 0.1` |
 | 4 バックテスト | `python src/backtest/simulator.py --start_date 2022-01-01 --end_date 2023-12-31` |
+| 目標の到達確率 | `python src/backtest/target_planner.py --target 4.0 --days 7` |
 | 4b パラメータ探索 | `python src/backtest/sweep.py --start_date 2021-01-01 --end_date 2023-12-31 --holdout_start 2023-04-01` |
 | 推論 | `python src/models/predict.py --data processed/train.csv --model_dir artifacts/` |
 | 特徴量の寄与測定 | `python src/models/ablation.py --each --seeds 3` |
@@ -99,6 +100,40 @@ make ablation
 一方 pair (+0.001) と switch (-0.004) は効果が測れませんでした。合成データ側に相性の構造は入れてあるので、
 これは「相性が存在しない」ではなく「ペアあたり中央値 1 騎乗では推定できない」という結論です。
 
+## 券種と主催者
+
+### 券種
+
+既定は単勝のみです。`--tickets win,place,quinella` で複勝・馬連を加えられます。
+
+```bash
+python src/backtest/simulator.py --start_date 2022-01-01 --end_date 2023-12-31 --tickets win,place,quinella
+```
+
+複勝の払戻頭数は出走頭数から決まります (8 頭以上で 3 着まで、5〜7 頭で 2 着まで)。
+馬連のオッズは実データでは実際のプールを使い、無い場合のみ単勝プールから模擬します。
+
+### 2 着以降の確率は Harville では足りない
+
+素の Plackett-Luce (Harville) は、1 着確率から 2 着・3 着を導くときに強い馬の連対率を系統的に過大評価します。
+勝てなかった馬は「僅差で負けた」より「何かがうまくいかなかった」ことが多いためです。
+`RunDownDiscount` がべき乗ディスカウント (Stern / Henery 型) を較正スライスで最尤推定し、それを通します。
+λ=1 は Harville と厳密に一致するので、未推定でも既存の値は変わりません。
+
+合成データで λ=0.65 の走り方を生成し、推定値が λ=0.644 / μ=0.624 と回収できることをテストで確認しています。
+
+### 地方競馬
+
+`--include_nar` で地方競馬を加えた合成データを生成します。実データでは `CombinedSource` に主催者ごとのソースを渡します。
+
+```bash
+python src/data/preprocess.py --input raw_data/ --output processed/ --include_nar
+```
+
+週次リターンの天井は「1 点あたり期待対数成長 × 週あたりの点数」で決まります。
+JRA は週 2 開催日しかありませんが、地方競馬はほぼ毎日開催しているため、開催日が 3 倍以上になります。
+1 点あたりのエッジを上げるより、点数を増やすほうが現実的なことが多く、`target_planner.py` がこの分解を計算します。
+
 ## パラメータ探索 (Phase 4b)
 
 EV 閾値と Kelly 係数をウォークフォワードで探索します。ウォークフォワード予測は**一度だけ**生成してグリッド全体で使い回すため、
@@ -145,6 +180,15 @@ CSV の雛形は `python src/live/paper_trader.py template --date <date>` で作
 
 `live_data/ledger.jsonl` は追記のみです。決済しても過去の行は書き換えないので、
 結果を知る前に何を決めたかが必ず残ります。編集できる賭け記録は、負けた後に編集してしまうものだからです。
+
+### 成績には必ず区間が付く
+
+回収率は点推定では報告しません。開催日単位のブロック・ブートストラップで 95% 区間と、
+損益分岐を下回る確率を出します。同一レース内のベットは排反で相関し、同日のベットは同じモデルと資金を共有するため、
+1 点単位で再標本化すると区間が実際より狭く出るからです。
+
+投入額加重と 1 点等重みの回収率を両方出します。複利では後半のベットほど金額が大きいため、
+前者は「たまたま大きく賭けていたときに当たった」だけで上振れします。施策の比較には後者を見てください。
 
 ### 安全装置 (当日運用)
 
