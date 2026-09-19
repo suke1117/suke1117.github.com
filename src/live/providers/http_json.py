@@ -40,6 +40,7 @@ import yaml
 from src.live.providers.base import (
     CARD_ENTRY_COLUMNS,
     CARD_RACE_COLUMNS,
+    OPTIONAL_CARD_ENTRY_COLUMNS,
     OPTIONAL_CARD_RACE_COLUMNS,
     LiveProvider,
     ProviderError,
@@ -109,7 +110,8 @@ class HttpJsonProvider(LiveProvider):
                 if c in df.columns]].drop_duplicates("race_id").reset_index(drop=True)
         if "n_runners" not in races.columns:
             races = races.merge(df.groupby("race_id").size().rename("n_runners").reset_index(), on="race_id")
-        return self.validate_card(races, df[CARD_ENTRY_COLUMNS].reset_index(drop=True))
+        ecols = CARD_ENTRY_COLUMNS + [c for c in OPTIONAL_CARD_ENTRY_COLUMNS if c in df.columns]
+        return self.validate_card(races, df[ecols].reset_index(drop=True))
 
     def fetch_odds(self, date: pd.Timestamp) -> pd.DataFrame:
         spec = self.cfg["odds"]

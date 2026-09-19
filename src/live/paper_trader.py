@@ -39,7 +39,7 @@ from src.common.config import (  # noqa: E402
 from src.common.logging_utils import get_logger  # noqa: E402
 from src.data.features import build_features  # noqa: E402
 from src.data.schema import DEFAULT_ORGANIZER, RESULT_COLUMNS  # noqa: E402
-from src.live.explain import explain_day, write_day  # noqa: E402
+from src.live.explain import explain_day, runner_label, write_day  # noqa: E402
 from src.live.ledger import Ledger, PaperBet  # noqa: E402
 from src.live.providers import ProviderError, get_provider  # noqa: E402
 from src.live.providers.base import CARD_RACE_COLUMNS, OPTIONAL_CARD_RACE_COLUMNS  # noqa: E402
@@ -159,7 +159,11 @@ def slip_payload(date: pd.Timestamp, provider: str, priced: pd.DataFrame, races_
         m = meta.get(race_id, {})
         runners = [{
             "entrant_id": r.entrant_id, "post_position": int(r.post_position) if "post_position" in priced else None,
-            "jockey_id": getattr(r, "jockey_id", None), "p_win": round(float(r.p_win), 5),
+            "label": runner_label(getattr(r, "entrant_name", ""),
+                                  int(r.post_position) if "post_position" in priced else None, r.entrant_id),
+            "name": getattr(r, "entrant_name", None) or None,
+            "jockey_id": getattr(r, "jockey_id", None),
+            "jockey_name": getattr(r, "jockey_name", None) or None, "p_win": round(float(r.p_win), 5),
             "win_odds": None if pd.isna(r.win_odds) else float(r.win_odds),
             "ev": None if pd.isna(r.ev) else round(float(r.ev), 4),
             "stake": staked.get((race_id, r.entrant_id), 0.0),
@@ -211,9 +215,13 @@ def with_common(f):
 @click.option("--live_root", default="live_data/", show_default=True)
 def template(date: str, live_root: str) -> None:
     """Write an empty card CSV with the required header."""
-    from src.live.providers.base import CARD_ENTRY_COLUMNS, CARD_RACE_COLUMNS
+    from src.live.providers.base import (CARD_ENTRY_COLUMNS, CARD_RACE_COLUMNS,
+                                         OPTIONAL_CARD_ENTRY_COLUMNS)
 
-    cols = CARD_RACE_COLUMNS + [c for c in CARD_ENTRY_COLUMNS if c != "race_id"]
+    # the name columns are optional, but filling them is what turns "H00918"
+    # into something a reader recognises, so the template offers them
+    cols = (CARD_RACE_COLUMNS + [c for c in CARD_ENTRY_COLUMNS if c != "race_id"]
+            + OPTIONAL_CARD_ENTRY_COLUMNS)
     path = Path(live_root) / "cards" / f"{pd.Timestamp(date):%Y-%m-%d}.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(columns=cols).to_csv(path, index=False)
@@ -322,9 +330,13 @@ def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, 
         click.echo("No bet. No runner cleared the expected-value threshold, which is the system working,")
         click.echo("not failing: a day with no edge is a day to sit out.")
     else:
-        click.echo(f"{'race':<14}{'runner':<12}{'odds':>7}{'p':>8}{'EV':>7}{'stake':>10}")
+        label_of = {(r["race_id"], x["entrant_id"]): x["label"]
+                    for r in payload["races"] for x in r["runners"]}
+        click.echo(f"{'race':<14}{'runner':<20}{'odds':>7}{'p':>8}{'EV':>7}{'stake':>10}")
         for b in bets:
-            click.echo(f"{b.race_id:<14}{b.entrant_id:<12}{b.odds_at_bet:>7.1f}{b.prob:>8.3f}{b.ev:>7.3f}"
+            shown = " + ".join(label_of.get((b.race_id, leg), leg)
+                               for leg in str(b.entrant_id).split("+"))
+            click.echo(f"{b.race_id:<14}{shown:<20}{b.odds_at_bet:>7.1f}{b.prob:>8.3f}{b.ev:>7.3f}"
                        f"{b.stake:>10,.0f}")
         click.echo("-" * 74)
         click.echo(f"{len(bets)} bets on {s['n_races_bet']}/{s['n_races']} races, "

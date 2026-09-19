@@ -16,6 +16,7 @@ import pandas as pd
 from src.live.providers.base import (
     CARD_ENTRY_COLUMNS,
     CARD_RACE_COLUMNS,
+    OPTIONAL_CARD_ENTRY_COLUMNS,
     OPTIONAL_CARD_RACE_COLUMNS,
     LiveProvider,
     ProviderError,
@@ -52,7 +53,8 @@ class DemoProvider(LiveProvider):
     def fetch_card(self, date: pd.Timestamp) -> Tuple[pd.DataFrame, pd.DataFrame]:
         races, entries = self._day(date)
         cols = CARD_RACE_COLUMNS + [c for c in OPTIONAL_CARD_RACE_COLUMNS if c in races.columns]
-        return self.validate_card(races[cols].copy(), entries[CARD_ENTRY_COLUMNS].copy())
+        ecols = CARD_ENTRY_COLUMNS + [c for c in OPTIONAL_CARD_ENTRY_COLUMNS if c in entries.columns]
+        return self.validate_card(races[cols].copy(), entries[ecols].copy())
 
     def fetch_odds(self, date: pd.Timestamp) -> pd.DataFrame:
         _, entries = self._day(date)

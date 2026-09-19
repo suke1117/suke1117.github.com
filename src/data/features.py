@@ -327,7 +327,12 @@ def build_features(races: pd.DataFrame, entries: pd.DataFrame) -> Tuple[pd.DataF
     feature_cols = [c for c in feats.columns if c not in FORBIDDEN_FEATURE_COLUMNS]
     groups = {g: [c for c in cols if c in feature_cols] for g, cols in groups.items()}
 
-    keep = ["race_id", "race_date", "entrant_id", "jockey_id", "trainer_id", "finish_position", "finish_time_sec",
+    # ``post_position`` and the names are carried for display, not for the model:
+    # every screen names a runner by its 馬番 and, where the source has one, its
+    # name. They are in FORBIDDEN_FEATURE_COLUMNS so they cannot drift into the
+    # feature matrix.
+    keep = ["race_id", "race_date", "entrant_id", "entrant_name", "jockey_id", "jockey_name", "trainer_id",
+            "post_position", "finish_position", "finish_time_sec",
             "win_odds", "place_odds", "popularity", "n_runners"]
     keep = [c for c in keep if c in df.columns and c not in feature_cols]
     out = pd.concat([df[keep], feats[feature_cols]], axis=1)

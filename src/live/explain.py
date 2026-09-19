@@ -106,6 +106,24 @@ def venue_name(code) -> str:
     return VENUE_JA.get(key, key)
 
 
+def runner_label(name: Optional[str], post_position: Optional[int], entrant_id: str = "") -> str:
+    """What to call a runner on screen.
+
+    A 血統登録番号 like "H00918" identifies the horse to the database and to
+    nobody else. What a person reads a card with is the 馬番 - it is the number
+    on the saddlecloth and the number they key into a bet - so that leads, with
+    the name after it when the source carries one. Names are never invented to
+    fill the gap: on a page of real-looking numbers a made-up name reads as a
+    real horse.
+    """
+    name = str(name or "").strip()
+    if name in ("", "nan", "None"):
+        name = ""
+    if post_position:
+        return f"{int(post_position)}番 {name}".strip()
+    return name or str(entrant_id)
+
+
 def race_title(race: Dict) -> str:
     return f"{venue_name(race.get('venue'))} {race.get('race_no')}R"
 
@@ -202,10 +220,17 @@ def explain_race(race: pd.DataFrame, predictor: Predictor, policy: BetPolicy, ba
         r = race.iloc[i]
         row = {"entrant_id": str(r["entrant_id"]), "p_win": float(r["p_win"]),
                "odds": None if not np.isfinite(r["win_odds"]) else float(r["win_odds"]), "ev": float(ev[i])}
+        post = int(r["post_position"]) if "post_position" in race else None
+        name = str(r["entrant_name"]) if "entrant_name" in race else ""
+        jockey_name = str(r["jockey_name"]) if "jockey_name" in race else ""
         runners.append({
             **row,
-            "post_position": int(r["post_position"]) if "post_position" in race else None,
+            "post_position": post,
+            # what the screens print; the id stays for joining and settlement
+            "label": runner_label(name, post, row["entrant_id"]),
+            "name": name or None,
             "jockey_id": str(r.get("jockey_id", "")),
+            "jockey_name": jockey_name or None,
             "place_odds": None if "place_odds" not in race or not np.isfinite(r["place_odds"]) else float(r["place_odds"]),
             "market_p": float(market_p[i]),
             "edge": float(r["p_win"] - market_p[i]),
@@ -224,11 +249,15 @@ def explain_race(race: pd.DataFrame, predictor: Predictor, policy: BetPolicy, ba
         if pos >= max_explained and r["entrant_id"] not in backed:
             r["factors"] = []
 
+    label_of = {r["entrant_id"]: r["label"] for r in runners}
     bet_rows = []
     for b in bets:
         won = bet_wins(b, finishes, n_runners) if finishes else None
+        legs = list(b.legs) or [b.entrant_id]
         bet_rows.append({"ticket": b.bet_type, "ticket_ja": TICKET_JA.get(b.bet_type, b.bet_type),
-                         "selection": list(b.legs), "prob": round(b.prob, 5), "odds": b.odds,
+                         "selection": legs,
+                         "selection_label": [label_of.get(str(x), str(x)) for x in legs],
+                         "prob": round(b.prob, 5), "odds": b.odds,
                          "ev": round(b.ev, 4), "stake": b.stake, "fraction": round(b.fraction, 6), "won": won,
                          "profit": (b.stake * (b.odds - 1.0) if won else -b.stake) if won is not None else None})
 
@@ -237,7 +266,9 @@ def explain_race(race: pd.DataFrame, predictor: Predictor, policy: BetPolicy, ba
             if c in race}
     meta["venue_name"] = venue_name(meta.get("venue"))
     top = runners[0]
-    summary = (f"本命は{top['entrant_id']} (予測勝率 {top['p_win'] * 100:.1f}%、市場 {top['market_p'] * 100:.1f}%)。"
+    # "本命" is reserved for the runner actually backed (narrative.py). This line
+    # is about the model's top-ranked runner, which is often a different horse.
+    summary = (f"予測1位は{top['label']} (予測勝率 {top['p_win'] * 100:.1f}%、市場 {top['market_p'] * 100:.1f}%)。"
                + (f"{len(bet_rows)} 点購入、合計 {sum(b['stake'] for b in bet_rows):,.0f}円。"
                   if bet_rows else "期待値が閾値を超えた買い目が無く、見送り。"))
     return {"race_id": str(race["race_id"].iloc[0]), **meta, "title": race_title(meta),
@@ -382,10 +413,11 @@ def day(date, output_dir):
     for r in d["races"]:
         click.echo("-" * 78)
         click.echo(f"{r['title']}  {r['conditions']}")
-        click.echo(f"  {r['summary']}")
+        if not r.get("narrative"):
+            click.echo(f"  {r['summary']}")
         for b in r["bets"]:
             mark = "" if b["won"] is None else ("  的中" if b["won"] else "  外れ")
-            click.echo(f"  → {b['ticket_ja']} {'+'.join(b['selection'])} {b['odds']:.1f}倍 "
+            click.echo(f"  → {b['ticket_ja']} {'+'.join(b['selection_label'])} {b['odds']:.1f}倍 "
                        f"EV{b['ev']:.2f} {b['stake']:,.0f}円{mark}")
         if r.get("narrative"):
             click.echo("  " + r["narrative"])

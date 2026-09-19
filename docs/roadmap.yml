@@ -198,7 +198,15 @@ tasks:
       主力 / 対抗 / 押さえ はコードポイント順では強さ順にならない。
       もう 1 つは購入票で、馬連が "H1+H2" の 1 つの id で保存されるため単走馬との突合が外れ、
       馬連だけを買ったレースが「購入なし」として集計されていた。
-    files: [src/live/narrative.py, src/live/explain.py, web/index.html, tests/test_narrative.py]
+      画面と文章からは識別子を排除した。馬は「3番」、名前がデータにあれば「3番 <馬名>」で呼ぶ。
+      血統登録番号は結合と決済のために payload には残すが、表示には使わない。
+      馬名・騎手名は `entrant_name` / `jockey_name` として任意列で受け取り、無い場合に生成はしない。
+      実在の数字が並ぶページに架空の馬名を置けば実在の馬として読まれるため。
+      出走表の名前列はデータに名前があるときだけ出す。値付けの段階名も平易な語を主にした
+      (「勝率に変換 (PL)」「実績で補正 (較正)」)。寄与バーの数値は特徴量の生値ではなく寄与に変えた
+      (合計がスコアに一致するという説明と数字が一致するように)。
+    files: [src/live/narrative.py, src/live/explain.py, src/data/schema.py, web/index.html,
+            tests/test_narrative.py, tests/test_explain.py]
 
   - id: L1
     title: 発走時刻とオッズ取得時刻を記録する

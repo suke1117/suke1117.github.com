@@ -122,6 +122,24 @@ def confidence(fraction: float, day_max_fraction: float) -> Dict:
     return {"grade": grade, "share": round(share, 4), "note": GRADE_NOTE[grade], "relative": True}
 
 
+def _label(runner: Optional[Dict]) -> str:
+    """How a runner is named in prose: "3番" or "3番 <名前>", never its id."""
+    if not runner:
+        return "—"
+    if runner.get("label"):
+        return str(runner["label"])
+    post = runner.get("post_position")
+    return f"{int(post)}番" if post else str(runner.get("entrant_id", "—"))
+
+
+def _leg_labels(bet: Dict, race: Dict) -> List[str]:
+    """Label each leg of a ticket, falling back to the runner list if needed."""
+    if bet.get("selection_label"):
+        return [str(x) for x in bet["selection_label"]]
+    by_id = {r.get("entrant_id"): r for r in race["runners"]}
+    return [_label(by_id.get(leg)) for leg in bet["selection"]]
+
+
 def _lead_runner(race: Dict) -> Dict:
     backed = [r for r in race["runners"] if r["decision"]["action"] == "bet"]
     return backed[0] if backed else race["runners"][0]
@@ -136,7 +154,7 @@ def race_narrative(race: Dict, ev_threshold: float) -> str:
     bits: List[str] = []
 
     edge_pt = (lead["p_win"] - lead["market_p"]) * 100
-    bits.append(f"本命は{lead['entrant_id']}。予測勝率 {_pct(lead['p_win'])} に対し市場は "
+    bits.append(f"本命は{_label(lead)}。予測勝率 {_pct(lead['p_win'])} に対し市場は "
                 f"{_pct(lead['market_p'])} で、{abs(edge_pt):.1f} ポイント"
                 + ("高く見ています。" if edge_pt >= 0 else "低く見ています。"))
     if reasons["for"]:
@@ -155,7 +173,7 @@ def race_narrative(race: Dict, ev_threshold: float) -> str:
         if len(race["bets"]) > 1:
             bits.append(f"ほかに {len(race['bets']) - 1} 点。")
     else:
-        bits.append(f"ただし最も期待値の高い {top['entrant_id']} でも {top['ev']:.2f} で、"
+        bits.append(f"ただし最も期待値の高い {_label(top)} でも {top['ev']:.2f} で、"
                     f"閾値 {ev_threshold:.2f} に届きません。控除率のあるレースで優位が無いまま買えば、"
                     "長期的には確実に負けるため見送ります。")
     return "".join(bits)
@@ -173,12 +191,7 @@ def race_tip(race: Dict, ev_threshold: float) -> str:
     n = race.get("n_runners") or len(race["runners"])
     lines = [head]
     for b in race["bets"]:
-        legs = "+".join(b["selection"])
-        nums = []
-        for leg in b["selection"]:
-            run = next((r for r in race["runners"] if r["entrant_id"] == leg), None)
-            nums.append(f"{run['post_position']}番" if run and run.get("post_position") else leg)
-        lines.append(f"◎ {TICKET_JA.get(b['ticket'], b['ticket'])} {'+'.join(nums)} ({legs})  "
+        lines.append(f"◎ {TICKET_JA.get(b['ticket'], b['ticket'])} {' + '.join(_leg_labels(b, race))}  "
                      f"{b['odds']:.1f}倍  {b['stake']:,.0f}円")
     lead = _lead_runner(race)
     reasons = runner_reasons(lead, n)
@@ -212,12 +225,9 @@ def day_tip(day: Dict, top_n: int = 5) -> str:
         return header + "\n\n本日は期待値が閾値を超える買い目がありませんでした。見送りです。"
     lines = [header, ""]
     for share, r, b in plays[:top_n]:
-        nums = []
-        for leg in b["selection"]:
-            run = next((x for x in r["runners"] if x["entrant_id"] == leg), None)
-            nums.append(f"{run['post_position']}番" if run and run.get("post_position") else leg)
         grade = b.get("confidence", {}).get("grade", "")
-        lines.append(f"[{grade}] {r['title']}  {TICKET_JA.get(b['ticket'], b['ticket'])} {'+'.join(nums)}  "
+        lines.append(f"[{grade}] {r['title']}  {TICKET_JA.get(b['ticket'], b['ticket'])} "
+                     f"{' + '.join(_leg_labels(b, r))}  "
                      f"{b['odds']:.1f}倍  期待値 {b['ev']:.2f}  {b['stake']:,.0f}円")
     if len(plays) > top_n:
         lines.append(f"ほか {len(plays) - top_n} 点")

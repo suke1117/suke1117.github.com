@@ -11,6 +11,7 @@ from src.live.explain import (
     feature_label,
     race_conditions,
     race_title,
+    runner_label,
     score_contributions,
     top_factors,
     venue_name,
@@ -147,3 +148,27 @@ def test_attributions_are_kept_for_contenders_and_anything_backed(fitted):
             assert r["factors"], (pos, r["entrant_id"])
         else:
             assert r["factors"] == []
+
+
+# --------------------------------------------------------------------------
+# naming: a registration id is not an answer
+# --------------------------------------------------------------------------
+def test_a_runner_is_named_by_the_number_on_its_saddlecloth():
+    assert runner_label(None, 3, "H00918") == "3番"
+    assert runner_label("", 3, "H00918") == "3番"
+
+
+def test_a_name_is_appended_when_the_source_has_one():
+    assert runner_label("ディープインパクト", 3, "H00918") == "3番 ディープインパクト"
+
+
+def test_a_missing_name_is_never_invented():
+    """NaN read back from a CSV must not print as the word "nan"."""
+    for empty in (None, "", "nan", "None", float("nan")):
+        label = runner_label(empty if empty == empty else "nan", 7, "H1")
+        assert label == "7番"
+
+
+def test_the_id_is_the_last_resort_only():
+    """Nothing in the schema allows this, but a label must never be blank."""
+    assert runner_label(None, None, "H00918") == "H00918"

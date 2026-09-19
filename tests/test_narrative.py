@@ -158,8 +158,25 @@ def test_a_races_grade_comes_from_its_strongest_bet_not_string_order():
 # --------------------------------------------------------------------------
 def test_a_play_states_the_edge_the_price_and_the_stake(day):
     text = race_narrative(day["races"][0], 1.15)
-    assert "H1" in text and "8.0 ポイント" in text
+    assert "1番" in text and "8.0 ポイント" in text
     assert "1.32" in text and "3,000円" in text and "1.15" in text
+
+
+def test_prose_names_a_runner_by_its_number_never_by_its_registration_id(day):
+    """"H1" identifies the horse to the database and to nobody else."""
+    for race in day["races"]:
+        text = race_narrative(race, 1.15) + race_tip(race, 1.15)
+        assert not any(r["entrant_id"] in text for r in race["runners"]), text
+
+
+def test_a_name_is_used_when_the_source_carries_one(day):
+    race = day["races"][0]
+    for run in race["runners"]:
+        run["label"] = f"{run['post_position']}番 テスト馬{run['post_position']}"
+    for b in race["bets"]:
+        b["selection_label"] = ["1番 テスト馬1"]
+    assert "1番 テスト馬1" in race_narrative(race, 1.15)
+    assert "1番 テスト馬1" in race_tip(race, 1.15)
 
 
 def test_a_non_win_ticket_never_quotes_the_win_probability(day):
@@ -182,8 +199,9 @@ def test_the_tip_block_carries_the_downside_too(day):
 
 
 def test_the_tip_block_prints_the_number_a_customer_would_key_in(day):
+    """The 馬番 is what goes on the betting slip, so it is what gets printed."""
     text = race_tip(day["races"][0], 1.15)
-    assert "1番" in text and "(H1)" in text
+    assert "◎ 単勝 1番" in text and "H1" not in text
 
 
 def test_a_pass_still_produces_a_sendable_block(day):

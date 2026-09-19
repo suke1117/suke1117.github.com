@@ -53,10 +53,18 @@ ENTRY_COLUMNS: Dict[str, str] = {
     "popularity": "int",       # 人気順 (optional)
 }
 
+#: Optional entry columns. Names are display-only and never reach the model: a
+#: 血統登録番号 identifies a horse but tells a reader nothing, so every screen
+#: shows the name when the source carries one and the 馬番 when it does not.
+#: They are never invented - a made-up name on a page of real-looking numbers
+#: reads as a real horse.
+OPTIONAL_ENTRY_COLUMNS: Dict[str, str] = {"entrant_name": "str", "jockey_name": "str"}
+
 RESULT_COLUMNS: List[str] = ["finish_position", "finish_time_sec", "win_odds", "place_odds", "popularity"]
 
 # columns that must NEVER appear in the model feature matrix
-FORBIDDEN_FEATURE_COLUMNS = set(RESULT_COLUMNS) | {"relevance", "label", "race_date", "race_id", "entrant_id"}
+FORBIDDEN_FEATURE_COLUMNS = (set(RESULT_COLUMNS) | set(OPTIONAL_ENTRY_COLUMNS)
+                              | {"relevance", "label", "race_date", "race_id", "entrant_id"})
 
 
 def validate_frames(races, entries) -> None:

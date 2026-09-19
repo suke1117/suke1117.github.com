@@ -477,6 +477,10 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     return n;
   };
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  /* Horse and jockey names come from the data file, so they go through this
+     before any innerHTML. Everything else built by hand here is numeric. */
+  const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g,
+    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   /* ---------- scales & ticks ---------- */
   function niceTicks(lo, hi, count) {
@@ -834,6 +838,12 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
   const mdLabel = (iso) => `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}`;
   const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
   const gradeClass = (g) => GRADE_CLASS[g] || "g0";
+  /* A registration id names the horse to the database and to nobody else. The
+     馬番 is the number on the saddlecloth and the number a bet is keyed with,
+     so that is what every screen leads with, with the name after it when the
+     data source carries one. */
+  const runnerLabel = (run) => run.label || (run.post_position ? run.post_position + "番" : run.entrant_id);
+  const legLabels = (bet) => bet.selection_label || bet.selection;
   const raceBestEv = (r) => (r.bets || []).length ? Math.max.apply(null, r.bets.map(b => b.ev)) : null;
 
   function remember(key, value) {
@@ -961,7 +971,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         const hl = el("div", { class: "hl" });
         hl.appendChild(el("span", { text: headline.title + "　" }));
         hl.appendChild(el("span", { class: "mk", text:
-          `${b.ticket_ja} ${b.selection.join(" + ")}　${F.fx(b.odds, 1)}倍　期待値 ${F.fx(b.ev, 2)}` }));
+          `${b.ticket_ja} ${legLabels(b).join(" + ")}　${F.fx(b.odds, 1)}倍　期待値 ${F.fx(b.ev, 2)}` }));
         left.appendChild(hl);
       } else {
         left.appendChild(el("div", { class: "hl", text: "この日は勝負に値するレースがありません" }));
@@ -1122,7 +1132,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
           if (r.n_bets) {
             const best = r.bets.slice().sort((x, y) => y.ev - x.ev)[0];
             ln.appendChild(el("span", { class: "mk",
-              text: `${best.ticket_ja} ${best.selection.join("+")} ${F.fx(best.odds, 1)}倍` }));
+              text: `${best.ticket_ja} ${legLabels(best).join("+")} ${F.fx(best.odds, 1)}倍` }));
             ln.appendChild(el("span", { class: "evn", text: `EV ${F.fx(best.ev, 2)}` }));
             if (r.n_bets > 1) ln.appendChild(el("span", { text: `ほか ${r.n_bets - 1} 点` }));
             ln.appendChild(el("span", { class: "stk", text: F.yen(r.total_stake) }));
@@ -1176,7 +1186,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
           r.bets.forEach(b => {
             const t = el("div", { class: "fc-ticket" });
             t.appendChild(el("span", { class: "kind", text: b.ticket_ja }));
-            t.appendChild(el("span", { class: "sel", text: b.selection.join(" + ") }));
+            t.appendChild(el("span", { class: "sel", text: legLabels(b).join(" + ") }));
             t.appendChild(el("span", { class: "num", text: `${F.fx(b.odds, 1)}倍` }));
             t.appendChild(el("span", { class: "num",
               text: `${b.ticket === "win" ? "勝率" : "的中率"} ${F.pct(b.prob)}` }));
@@ -1195,7 +1205,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         } else {
           const best = r.runners[0];
           sec1.appendChild(el("div", { class: "fc-pass", text:
-            `最も期待値の高い ${best.entrant_id} でも ${F.fx(best.ev, 3)} で、閾値 ${day.policy.ev_threshold} に届きません。` +
+            `最も期待値の高い ${runnerLabel(best)} でも ${F.fx(best.ev, 3)} で、閾値 ${day.policy.ev_threshold} に届きません。` +
             "賭けないことは判断であって、機会損失ではありません。控除率のあるレースでは、" +
             "優位が無いのに買えば確実に損をします。" }));
         }
@@ -1210,9 +1220,15 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         const sec2 = el("div", { class: "fc-sec" });
         sec2.appendChild(el("h4", { text: "出走表 — 行を押すとその馬の根拠が出ます" }));
         const hasFinish = r.runners.some(x => x.finish_position);
+        /* Name columns appear only when the data source actually carries names.
+           An empty 馬 column full of dashes is worse than no column. */
+        const hasName = r.runners.some(x => x.name);
+        const hasJockey = r.runners.some(x => x.jockey_name);
         const tw = el("div", { class: "tw" });
         const tb = el("table");
-        tb.innerHTML = "<thead><tr><th>馬番</th><th>馬</th><th>騎手</th><th>予測勝率</th><th>市場</th><th>差</th>" +
+        tb.innerHTML = "<thead><tr><th>馬番</th>" + (hasName ? "<th>馬</th>" : "") +
+          (hasJockey ? "<th>騎手</th>" : "") +
+          "<th>予測勝率</th><th>市場</th><th>差</th>" +
           "<th>単勝</th><th>期待値</th><th>判定</th>" + (hasFinish ? "<th>着順</th>" : "") +
           "</tr></thead><tbody></tbody>";
         const tbody = tb.querySelector("tbody");
@@ -1222,8 +1238,9 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
           tr.setAttribute("aria-current", String(run.entrant_id === FC.runnerId));
           const act = run.decision.action === "bet";
           tr.innerHTML =
-            `<td class="num pos">${run.post_position == null ? "—" : run.post_position}</td>` +
-            `<td class="num">${run.entrant_id}</td><td class="num">${run.jockey_id || "—"}</td>` +
+            `<td class="num pos">${run.post_position == null ? "—" : run.post_position + "番"}</td>` +
+            (hasName ? `<td>${esc(run.name || "—")}</td>` : "") +
+            (hasJockey ? `<td>${esc(run.jockey_name || "—")}</td>` : "") +
             `<td class="num">${F.pct(run.p_win)}</td><td class="num">${F.pct(run.market_p)}</td>` +
             `<td class="num ${run.edge > 0 ? "edge-pos" : "edge-neg"}">` +
             `${run.edge >= 0 ? "+" : ""}${(run.edge * 100).toFixed(1)}pt</td>` +
@@ -1241,6 +1258,10 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         });
         tw.appendChild(tb);
         sec2.appendChild(tw);
+        sec2.appendChild(el("div", { class: "fc-note", text:
+          "予測勝率 = このシステムの推定。市場 = 単勝オッズを勝率に直したもの (控除率込みなので合計は 100% を超えます)。" +
+          "差 = 予測勝率 − 市場。期待値 = 予測勝率 × 単勝オッズで、1.00 で損得なし。" +
+          "この 3 つが揃って初めて買う意味が出ます。" }));
         detail.appendChild(sec2);
 
         const chosen = r.runners.find(x => x.entrant_id === FC.runnerId)
@@ -1274,7 +1295,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     function whyPanel(run) {
       const box = el("div", { class: "fc-why" });
       const hd = el("div", { class: "hd" });
-      hd.appendChild(el("span", { class: "nm", text: run.entrant_id }));
+      hd.appendChild(el("span", { class: "nm", text: runnerLabel(run) }));
       hd.appendChild(el("span", { class: run.decision.action === "bet" ? "tag-bet" : "tag-pass",
         text: run.decision.action === "bet" ? `購入 ${F.yen(run.decision.stake)}` : "見送り" }));
       if (run.finish_position) {
@@ -1319,11 +1340,11 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         d.appendChild(el("div", { class: "v", text: v }));
         return d;
       };
-      chain.appendChild(st("ランカーのスコア", F.fx(run.pricing.score, 3)));
-      chain.appendChild(st("Plackett-Luce", F.pct(run.pricing.p_plackett_luce)));
-      chain.appendChild(st("Isotonic 較正後", F.pct(run.pricing.p_calibrated)));
-      chain.appendChild(st("市場ブレンド後", F.pct(run.pricing.p_final)));
-      chain.appendChild(st("市場の見方", F.pct(run.market_p)));
+      chain.appendChild(st("モデルの点数", F.fx(run.pricing.score, 3)));
+      chain.appendChild(st("勝率に変換 (PL)", F.pct(run.pricing.p_plackett_luce)));
+      chain.appendChild(st("実績で補正 (較正)", F.pct(run.pricing.p_calibrated)));
+      chain.appendChild(st("オッズと統合", F.pct(run.pricing.p_final)));
+      chain.appendChild(st("オッズが示す勝率", F.pct(run.market_p)));
       box.appendChild(chain);
 
       if ((run.factors || []).length) {
@@ -1340,13 +1361,17 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
           row.appendChild(el("span", { class: "bar", html:
             '<span class="mid"></span><span class="f" style="' + (up ? "left:50%" : "right:50%") +
             `;width:${w}%;background:${up ? css("--s1") : css("--critical")}"></span>` }));
-          row.appendChild(el("span", { class: "vl", text: x.value == null ? "—" : String(x.value) }));
+          /* the contribution, not the raw feature value: it is what the bar
+             encodes, and it is the number that adds up to the score below */
+          row.appendChild(el("span", { class: "vl",
+            text: (x.contribution >= 0 ? "+" : "") + x.contribution.toFixed(3) }));
           fl.appendChild(row);
         });
         box.appendChild(fl);
         box.appendChild(el("div", { class: "fc-note", text:
-          "上の文章はこの内訳を言い換えたものです。内訳は決定木が出したスコアへの各特徴量の寄与で、" +
-          "合計するとスコアと厳密に一致します。" +
+          `上の文章はこの内訳を言い換えたものです。右の数字は「モデルの点数」への寄与で、` +
+          `残り (基準値と上位4件以外の合計) ${F.fx(run.pricing.score - run.factors.reduce((a, x) => a + x.contribution, 0), 3)} ` +
+          `を足すと ${F.fx(run.pricing.score, 3)} に厳密に一致します。` +
           "確率そのものではなくスコアの説明である点に注意してください。" +
           "後段の Plackett-Luce・較正・市場ブレンドは、出走馬全体をまとめて変形するためです。" }));
       } else {

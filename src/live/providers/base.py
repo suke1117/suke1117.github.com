@@ -31,6 +31,9 @@ CARD_RACE_COLUMNS = ["race_id", "race_date", "venue", "race_no", "distance_m", "
 #: once the data spans more than one organization, so dropping it here would
 #: make today's card disagree with the model.
 OPTIONAL_CARD_RACE_COLUMNS = ["organizer"]
+#: display-only, and never fed to the model. Dropping these would leave the
+#: screens naming horses by 血統登録番号, which reads as nothing to a person.
+OPTIONAL_CARD_ENTRY_COLUMNS = ["entrant_name", "jockey_name"]
 
 
 class ProviderError(RuntimeError):
