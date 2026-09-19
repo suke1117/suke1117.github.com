@@ -37,6 +37,7 @@ import pandas as pd  # noqa: E402
 
 from src.betting.strategy import BetPolicy, bet_wins, place_payout_depth, select_bets  # noqa: E402
 from src.common.logging_utils import get_logger  # noqa: E402
+from src.live.narrative import enrich_day  # noqa: E402
 from src.models.predict import Predictor  # noqa: E402
 
 log = get_logger("explain")
@@ -228,7 +229,7 @@ def explain_race(race: pd.DataFrame, predictor: Predictor, policy: BetPolicy, ba
         won = bet_wins(b, finishes, n_runners) if finishes else None
         bet_rows.append({"ticket": b.bet_type, "ticket_ja": TICKET_JA.get(b.bet_type, b.bet_type),
                          "selection": list(b.legs), "prob": round(b.prob, 5), "odds": b.odds,
-                         "ev": round(b.ev, 4), "stake": b.stake, "won": won,
+                         "ev": round(b.ev, 4), "stake": b.stake, "fraction": round(b.fraction, 6), "won": won,
                          "profit": (b.stake * (b.odds - 1.0) if won else -b.stake) if won is not None else None})
 
     meta = {c: (r0 if not isinstance(r0 := race[c].iloc[0], (np.integer, np.floating)) else r0.item())
@@ -266,11 +267,13 @@ def explain_day(day: pd.DataFrame, predictor: Predictor, policy: BetPolicy, bank
                 with_result: bool = True, max_explained: int = 6) -> Dict:
     races = [explain_race(g, predictor, policy, bankroll, with_result, max_explained)
              for _, g in day.groupby("race_id", sort=True)]
-    races.sort(key=lambda r: (str(r.get("venue")), int(r.get("race_no") or 0)))
+    # Race number first: across venues that is roughly the running order, which
+    # is the order a card is actually worked through. True off times need L1.
+    races.sort(key=lambda r: (int(r.get("race_no") or 0), str(r.get("venue"))))
     settled = [b for r in races for b in r["bets"] if b["won"] is not None]
     staked = sum(b["stake"] for b in settled)
     profit = sum(b["profit"] for b in settled)
-    return {
+    payload = {
         "date": f"{pd.Timestamp(day['race_date'].iloc[0]):%Y-%m-%d}",
         "n_races": len(races), "n_races_bet": sum(1 for r in races if r["n_bets"]),
         "n_bets": sum(r["n_bets"] for r in races), "total_stake": sum(r["total_stake"] for r in races),
@@ -281,8 +284,10 @@ def explain_day(day: pd.DataFrame, predictor: Predictor, policy: BetPolicy, bank
                    "max_bets_per_race": policy.max_bets_per_race, "ticket_types": list(policy.ticket_types)},
         "run_down": predictor.run_down.to_dict(),
         "bankroll": bankroll,
+        "venues": sorted({r.get("venue_name") or r.get("venue") for r in races}),
         "races": races,
     }
+    return enrich_day(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -382,9 +387,8 @@ def day(date, output_dir):
             mark = "" if b["won"] is None else ("  的中" if b["won"] else "  外れ")
             click.echo(f"  → {b['ticket_ja']} {'+'.join(b['selection'])} {b['odds']:.1f}倍 "
                        f"EV{b['ev']:.2f} {b['stake']:,.0f}円{mark}")
-        top = r["runners"][0]
-        click.echo(f"  本命の根拠: " + " / ".join(
-            f"{f['label']}{'↑' if f['direction'] == 'up' else '↓'}" for f in top["factors"]))
+        if r.get("narrative"):
+            click.echo("  " + r["narrative"])
 
 
 if __name__ == "__main__":

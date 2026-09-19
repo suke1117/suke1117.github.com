@@ -24,7 +24,8 @@ src/
   backtest/    ウォークフォワード・ペーパーベッティング simulator.py CLI, パラメータ探索 sweep.py CLI, metrics.py
   web/         ダッシュボード用データ書き出し export_dashboard.py, 単体HTMLビルド build_static.py
   live/        当日運用: providers/ (差し替え可能なデータ取得), paper_trader.py CLI, ledger.py, api.py,
-               explain.py (買い目の根拠を書き出す CLI。予想ページのデータ源)
+               explain.py (買い目の根拠を書き出す CLI。予想ページのデータ源),
+               narrative.py (説明レイヤの値を日本語の根拠文と配布用の買い目ブロックに変換)
 web/           静的ダッシュボード (index.html + data.json)。ハンバーガーメニューで6ページ構成
                先頭が「予想」(日付 → レース → 出走表 → その馬の根拠)。当日も過去も同じ画面で、
                当日分は paper_trader bet が explained/ に書き出す。「収支」は台帳の記録のみ
@@ -148,6 +149,15 @@ python src/live/api.py                                     # http://127.0.0.1:87
 python src/live/explain.py archive --days 7   # live_data/explained/<date>.json と index.json
 python src/live/explain.py day --date <date>  # テキストで確認
 ```
+
+4. **文章化は言い換えに限る**: `src/live/narrative.py` が上の 3 層から根拠文と配布用の買い目ブロックを作る。
+   1 フレーズは 1 つの測定値の言い換えであること。断定語 (鉄板・確実・必勝など) を語彙に入れてはならない。
+   不利材料は有利材料と同じ構造で必ず書く。片側だけを並べたものは予想ではなく広告である。
+   見送りにも理由と数値を付ける。券種ごとの確率を取り違えてはならない
+   (複勝の期待値の横に単勝の勝率を出さない)。
+5. **自信度はその日の相対値**: 主力 / 対抗 / 押さえ は、その日の最大ケリー配分に対する比で決める。
+   絶対スケールでの格付けは実世界のエッジについての主張になり、いまのデータでは裏付けが無い。
+   日本語の格付けラベルを文字列の大小で比較してはならない (コードポイント順は強さ順ではない)。
 
 ## 5. Improvement Roadmap
 

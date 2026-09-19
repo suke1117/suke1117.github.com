@@ -146,7 +146,14 @@ def slip_payload(date: pd.Timestamp, provider: str, priced: pd.DataFrame, races_
                  bets: List[PaperBet], policy: BetPolicy, policy_source: str, bankroll: float,
                  max_daily_exposure: float = MAX_DAILY_EXPOSURE) -> Dict:
     meta = races_today.set_index("race_id").to_dict("index")
-    staked = {(b.race_id, b.entrant_id): b.stake for b in bets}
+    # A multi-leg ticket is stored under "H1+H2", so a per-runner lookup on the
+    # whole id finds nothing and the race reads as unbet. Credit every leg.
+    staked: Dict[Tuple[str, str], float] = {}
+    n_bets_by_race: Dict[str, int] = {}
+    for b in bets:
+        for leg in str(b.entrant_id).split("+"):
+            staked[(b.race_id, leg)] = staked.get((b.race_id, leg), 0.0) + b.stake
+        n_bets_by_race[b.race_id] = n_bets_by_race.get(b.race_id, 0) + 1
     races = []
     for race_id, g in priced.sort_values(["race_id", "p_win"], ascending=[True, False]).groupby("race_id", sort=True):
         m = meta.get(race_id, {})
@@ -160,7 +167,7 @@ def slip_payload(date: pd.Timestamp, provider: str, priced: pd.DataFrame, races_
         races.append({"race_id": race_id, "venue": m.get("venue"), "race_no": int(m.get("race_no", 0)),
                       "distance_m": int(m.get("distance_m", 0)), "surface": m.get("surface"), "going": m.get("going"),
                       "race_class": m.get("race_class"), "n_runners": len(runners),
-                      "n_bets": sum(1 for x in runners if x["stake"] > 0), "runners": runners})
+                      "n_bets": n_bets_by_race.get(race_id, 0), "runners": runners})
     return {
         "date": f"{pd.Timestamp(date):%Y-%m-%d}",
         "generated_at": pd.Timestamp.now("UTC").strftime("%Y-%m-%d %H:%M UTC"),

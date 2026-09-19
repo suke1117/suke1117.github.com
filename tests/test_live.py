@@ -209,3 +209,46 @@ def test_live_policy_cannot_exceed_the_hard_kelly_cap(tmp_path):
 
     with pytest.raises(KellyAlphaError):
         default_policy(0.9, None, None, str(tmp_path / "missing.json"))
+
+
+# --------------------------------------------------------------------------
+# the slip must describe the bets it actually placed
+# --------------------------------------------------------------------------
+def test_a_multi_leg_ticket_still_counts_as_a_bet_on_its_race():
+    """A quinella is stored under "H1+H2", which no single runner id matches.
+
+    Keying the per-runner stakes on the whole id left those races reading as
+    "no bet" in the slip, so the summary under-reported how many races were
+    played while the bet list said otherwise.
+    """
+    from src.betting.strategy import BetPolicy
+    from src.live.paper_trader import slip_payload
+
+    priced = pd.DataFrame({
+        "race_id": ["R1", "R1", "R2", "R2"],
+        "entrant_id": ["H1", "H2", "H3", "H4"],
+        "post_position": [1, 2, 1, 2],
+        "jockey_id": ["J1", "J2", "J3", "J4"],
+        "p_win": [0.4, 0.3, 0.5, 0.2],
+        "win_odds": [3.0, 5.0, 2.5, 9.0],
+        "ev": [1.2, 1.5, 1.25, 1.8],
+    })
+    races_today = pd.DataFrame({
+        "race_id": ["R1", "R2"], "venue": ["01", "01"], "race_no": [1, 2],
+        "distance_m": [1800, 1200], "surface": ["turf", "dirt"],
+        "going": ["good", "good"], "race_class": ["maiden", "maiden"],
+    })
+    bets = [
+        PaperBet.new(race_date="2024-01-01", race_id="R1", entrant_id="H1", bet_type="win",
+                     prob=0.4, odds_at_bet=3.0, ev=1.2, fraction=0.01, stake=1000.0),
+        PaperBet.new(race_date="2024-01-01", race_id="R2", entrant_id="H3+H4", bet_type="quinella",
+                     prob=0.12, odds_at_bet=15.0, ev=1.8, fraction=0.004, stake=400.0),
+    ]
+    payload = slip_payload(pd.Timestamp("2024-01-01"), "demo", priced, races_today, bets,
+                           BetPolicy(alpha=0.1), "default", 100000.0)
+
+    assert payload["summary"]["n_races_bet"] == 2
+    by_id = {r["race_id"]: r for r in payload["races"]}
+    assert by_id["R2"]["n_bets"] == 1
+    staked = {x["entrant_id"]: x["stake"] for x in by_id["R2"]["runners"]}
+    assert staked == {"H3": 400.0, "H4": 400.0}

@@ -347,6 +347,81 @@ tr.rn td.pos{font-family:"IBM Plex Mono",monospace; font-weight:600}
 .fc-note{font-size:11.5px; color:var(--muted); margin-top:11px; line-height:1.7}
 .fc-empty{padding:40px 16px; text-align:center; color:var(--muted); font-size:13px}
 
+/* 予想: tipster surface */
+.fc-hero{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; align-items:center;
+  border:1px solid var(--border); border-left:3px solid var(--s1); border-radius:var(--r);
+  background:var(--surface); padding:14px 16px; margin-bottom:12px}
+@media(max-width:700px){ .fc-hero{grid-template-columns:1fr} }
+.fc-hero .lb{font-size:11px; color:var(--muted); letter-spacing:.04em}
+.fc-hero .hl{font-size:16.5px; font-weight:600; margin-top:4px; line-height:1.55; letter-spacing:-.01em}
+.fc-hero .hl .mk{font-family:"IBM Plex Mono",monospace}
+.fc-hero .sb{font-size:12px; color:var(--ink-2); margin-top:5px; line-height:1.7}
+.fc-hero .sb b{font-variant-numeric:tabular-nums}
+.fc-acts{display:flex; gap:8px; flex-wrap:wrap}
+.btn-c{border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:7px;
+  padding:7px 12px; font:inherit; font-size:12px; font-weight:500; cursor:pointer; white-space:nowrap}
+.btn-c:hover{background:var(--surface-3)}
+.btn-c.ok{border-color:var(--good); color:var(--good-ink)}
+.btn-c:focus-visible{outline:2px solid var(--s1); outline-offset:2px}
+
+.fc-bar{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px}
+.fc-bar .gp{display:flex; gap:3px; background:var(--surface-2); border:1px solid var(--border);
+  border-radius:8px; padding:3px}
+.chip{border:none; background:transparent; color:var(--ink-2); border-radius:6px; padding:4px 10px;
+  font:inherit; font-size:11.5px; cursor:pointer; white-space:nowrap}
+.chip:hover{color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--surface); color:var(--ink); font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.09)}
+.chip:focus-visible{outline:2px solid var(--s1); outline-offset:1px}
+.fc-bar select{border:1px solid var(--border); background:var(--surface); color:var(--ink);
+  border-radius:8px; padding:6px 9px; font:inherit; font-size:11.5px}
+.fc-bar .cnt{font-size:11.5px; color:var(--muted); margin-left:auto; font-variant-numeric:tabular-nums}
+@media(max-width:700px){ .fc-bar .cnt{margin-left:0} }
+
+.grade{font-size:10.5px; font-weight:600; padding:1px 7px; border-radius:99px; white-space:nowrap; flex:none}
+.grade.g1{background:color-mix(in srgb, var(--s1) 17%, transparent); color:var(--s1)}
+.grade.g2{background:color-mix(in srgb, var(--s2) 18%, transparent); color:var(--s2)}
+.grade.g3{background:var(--surface-3); color:var(--ink-2)}
+.grade.g0{background:var(--surface-3); color:var(--muted); font-weight:500}
+
+.fc-race .hd2{display:flex; align-items:center; gap:7px; margin-bottom:4px}
+.fc-race .hd2 .cond{margin-left:auto}
+.fc-race .ln{font-size:11.5px; color:var(--ink-2); display:flex; gap:7px; align-items:baseline;
+  flex-wrap:wrap; line-height:1.6}
+.fc-race .ln .mk{font-family:"IBM Plex Mono",monospace; font-weight:600; color:var(--ink)}
+.fc-race .ln .stk{margin-left:auto; font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink)}
+.fc-race .ln .evn{font-variant-numeric:tabular-nums; color:var(--muted)}
+.fc-race .ln .res{margin-left:0}
+
+.fc-detail .dhd{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.fc-detail .dhd h3{margin-right:auto}
+.fc-narr{font-size:13px; line-height:1.9; color:var(--ink-2); margin:13px 0 0; padding:12px 14px;
+  border-radius:8px; background:var(--surface-2); border:1px solid var(--border)}
+.fc-tip{position:relative; margin-top:10px}
+.fc-tip pre{background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  padding:12px 92px 12px 14px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; line-height:1.85;
+  color:var(--ink-2); white-space:pre-wrap; word-break:break-word; margin:0}
+.fc-tip .btn-c{position:absolute; top:8px; right:8px; padding:5px 10px; font-size:11px}
+.fc-reasons{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px}
+@media(max-width:640px){ .fc-reasons{grid-template-columns:1fr} }
+.fc-reasons .col{border:1px solid var(--border); border-radius:8px; padding:9px 11px; background:var(--surface)}
+.fc-reasons .col h5{margin:0 0 5px; font-size:11px; font-weight:600; color:var(--muted)}
+.fc-reasons .col.pro h5{color:var(--s1)}
+.fc-reasons .col.con h5{color:var(--critical-ink)}
+.fc-reasons ul{margin:0; padding-left:16px}
+.fc-reasons li{font-size:12px; line-height:1.8; color:var(--ink-2)}
+.fc-keys{font-size:11px; color:var(--muted); margin-top:14px; line-height:1.9}
+.fc-keys kbd{font-family:"IBM Plex Mono",monospace; font-size:10.5px; border:1px solid var(--border);
+  border-bottom-width:2px; border-radius:4px; padding:0 5px; background:var(--surface-2); color:var(--ink-2)}
+.fc-more{border:1px solid var(--border); border-radius:var(--r); background:var(--surface);
+  padding:0 14px; margin-bottom:14px}
+.fc-more summary{cursor:pointer; padding:11px 0; font-size:12px; color:var(--ink-2); list-style:none}
+.fc-more summary::-webkit-details-marker{display:none}
+.fc-more summary::before{content:"▸ "; color:var(--muted)}
+.fc-more[open] summary::before{content:"▾ "}
+.fc-more summary:focus-visible{outline:2px solid var(--s1); outline-offset:2px}
+.fc-more .fc-day{margin:0 0 13px; border-radius:8px}
+
 /* rules / footer */
 .rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px}
 .rules.six{grid-template-columns:repeat(3,1fr)}
@@ -744,9 +819,63 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
 
   /* ---------- 予想: the product surface ---------- */
   const TICKET_JA = { win: "単勝", place: "複勝", quinella: "馬連" };
-  const FC = { root: null, index: [], embedded: {}, cache: {}, date: null, raceId: null, runnerId: null };
+  const GRADE_CLASS = { "主力": "g1", "対抗": "g2", "押さえ": "g3" };
+  const FILTERS = [
+    { id: "all", label: "全レース" },
+    { id: "bet", label: "購入のみ" },
+    { id: "main", label: "主力のみ" },
+    { id: "pass", label: "見送り" },
+  ];
+  const FC = {
+    root: null, index: [], embedded: {}, cache: {}, date: null, raceId: null, runnerId: null,
+    filter: "all", sort: "order", venue: null, visible: [], select: null, cycleFilter: null,
+    copyRace: null, bound: false,
+  };
   const mdLabel = (iso) => `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}`;
   const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
+  const gradeClass = (g) => GRADE_CLASS[g] || "g0";
+  const raceBestEv = (r) => (r.bets || []).length ? Math.max.apply(null, r.bets.map(b => b.ev)) : null;
+
+  function remember(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { /* storage blocked */ }
+  }
+  function recall(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  /* Copy without a clipboard permission is common in file:// and old browsers, so the
+     textarea fallback is the path that actually runs for a lot of people. */
+  function copyText(text, btn) {
+    const original = btn.dataset.label || btn.textContent;
+    btn.dataset.label = original;
+    const flash = (msg, ok) => {
+      btn.textContent = msg;
+      btn.classList.toggle("ok", !!ok);
+      setTimeout(() => { btn.textContent = original; btn.classList.remove("ok"); }, 1800);
+    };
+    const fallback = () => {
+      const ta = el("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      flash(ok ? "コピーしました" : "コピーできません", ok);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => flash("コピーしました", true), fallback);
+    } else {
+      fallback();
+    }
+  }
+  function copyButton(label, getText) {
+    const b = el("button", { class: "btn-c", type: "button", text: label });
+    b.addEventListener("click", (ev) => { ev.stopPropagation(); copyText(getText(), b); });
+    return b;
+  }
 
   function forecastPage(D) {
     const wrap = el("div");
@@ -762,6 +891,8 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         "python src/web/export_dashboard.py --output web/data.json</pre></div>" }));
       return wrap;
     }
+    FC.filter = FILTERS.some(x => x.id === recall("ea.fcfilter")) ? recall("ea.fcfilter") : "all";
+    FC.sort = ["order", "ev", "stake"].indexOf(recall("ea.fcsort")) >= 0 ? recall("ea.fcsort") : "order";
     const dates = el("div", { class: "fc-dates" });
     wrap.appendChild(dates);
     const body = el("div");
@@ -794,14 +925,18 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       FC.date = date;
       FC.raceId = null;
       FC.runnerId = null;
+      FC.venue = null;
       drawDates();
       body.innerHTML = '<div class="fc-empty">読み込み中…</div>';
-      try { localStorage.setItem("ea.fcdate", date); } catch (e) { /* blocked storage */ }
+      remember("ea.fcdate", date);
       try {
         const day = await getDay(date);
-        FC.raceId = (day.races[0] || {}).race_id || null;
         drawDay(day);
       } catch (err) {
+        FC.visible = [];
+        FC.select = null;
+        FC.cycleFilter = null;
+        FC.copyRace = null;
         body.innerHTML = "";
         body.appendChild(el("div", { class: "live-state warn", html:
           '<span class="dot-live off"></span><div><p>' + (err.message || err) + "</p>" +
@@ -811,6 +946,56 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
 
     function drawDay(day) {
       body.innerHTML = "";
+      const headline = day.races.find(r => r.race_id === day.headline_race_id)
+        || day.races.find(r => r.n_bets) || day.races[0];
+      const settled = day.recovery != null;
+      /* open on the play of the day: that is what a tipster looks at first */
+      if (!FC.raceId && headline) FC.raceId = headline.race_id;
+
+      /* hero: the one play to make, and the day in a line */
+      const hero = el("div", { class: "fc-hero" });
+      const left = el("div");
+      left.appendChild(el("div", { class: "lb", text: settled ? "この日の主力" : "本日の主力" }));
+      if (headline && headline.n_bets) {
+        const b = headline.bets.slice().sort((x, y) => y.ev - x.ev)[0];
+        const hl = el("div", { class: "hl" });
+        hl.appendChild(el("span", { text: headline.title + "　" }));
+        hl.appendChild(el("span", { class: "mk", text:
+          `${b.ticket_ja} ${b.selection.join(" + ")}　${F.fx(b.odds, 1)}倍　期待値 ${F.fx(b.ev, 2)}` }));
+        left.appendChild(hl);
+      } else {
+        left.appendChild(el("div", { class: "hl", text: "この日は勝負に値するレースがありません" }));
+      }
+      const parts = [`${day.n_races} レース中 <b>${day.n_races_bet}</b> レースで勝負`,
+                     `<b>${day.n_bets}</b> 点 / <b>${F.yen(day.total_stake)}</b>`,
+                     `資金比 <b>${F.pct(day.total_stake / day.bankroll, 1)}</b>`];
+      if (settled) {
+        parts.push(`回収率 <b>${F.pct(day.recovery)}</b> (${day.profit >= 0 ? "+" : ""}${F.yen(day.profit)})`);
+      }
+      left.appendChild(el("div", { class: "sb", html: parts.join("　·　") }));
+      hero.appendChild(left);
+      const acts = el("div", { class: "fc-acts" });
+      if (day.tip_text) acts.appendChild(copyButton("この日の予想をコピー", () => day.tip_text));
+      if (headline) {
+        const jump = el("button", { class: "btn-c", type: "button", text: "主力レースを見る" });
+        jump.addEventListener("click", () => {
+          FC.filter = "all";
+          FC.venue = null;
+          FC.raceId = headline.race_id;
+          FC.runnerId = null;
+          remember("ea.fcfilter", FC.filter);
+          drawBar();
+          drawList();
+          drawDetail();
+        });
+        acts.appendChild(jump);
+      }
+      hero.appendChild(acts);
+      body.appendChild(hero);
+
+      /* the running conditions are real but secondary, so they fold away */
+      const more = el("details", { class: "fc-more" });
+      more.appendChild(el("summary", { text: "この日の運用条件 (資金・方針・確率の補正)" }));
       const sum = el("div", { class: "fc-day" });
       const cell = (k, v, note) => {
         const d = el("div");
@@ -825,13 +1010,17 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         (day.policy.ticket_types || []).map(t => TICKET_JA[t] || t).join("・")));
       sum.appendChild(cell("投入", F.yen(day.total_stake),
         `資金比 ${F.pct(day.total_stake / day.bankroll, 1)}`));
+      sum.appendChild(cell("資金", F.yen(day.bankroll), "この日の開始時"));
       sum.appendChild(cell("回収率", day.recovery == null ? "未確定" : F.pct(day.recovery),
         day.profit == null ? "" : `${day.profit >= 0 ? "+" : ""}${F.yen(day.profit)}`));
       sum.appendChild(cell("方針", `α=${day.policy.alpha}`,
         `EV≥${day.policy.ev_threshold} / ${day.policy.max_bets_per_race}点`));
       sum.appendChild(cell("走り下り補正", `λ=${F.fx(day.run_down.lam)}`, `μ=${F.fx(day.run_down.mu)}`));
-      body.appendChild(sum);
+      more.appendChild(sum);
+      body.appendChild(more);
 
+      const bar = el("div", { class: "fc-bar" });
+      body.appendChild(bar);
       const split = el("div", { class: "fc-split" });
       const list = el("div", { class: "fc-list" });
       const detail = el("div", { class: "fc-detail" });
@@ -839,38 +1028,147 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       split.appendChild(detail);
       body.appendChild(split);
 
+      const venues = (day.venues || []).filter(Boolean);
+
+      function matches(r) {
+        if (FC.venue && (r.venue_name || r.venue) !== FC.venue) return false;
+        if (FC.filter === "bet") return r.n_bets > 0;
+        if (FC.filter === "pass") return !r.n_bets;
+        if (FC.filter === "main") return r.confidence === "主力";
+        return true;
+      }
+      function visibleRaces() {
+        const out = day.races.filter(matches);
+        if (FC.sort === "ev") {
+          out.sort((a, b) => (raceBestEv(b) == null ? -Infinity : raceBestEv(b)) -
+                             (raceBestEv(a) == null ? -Infinity : raceBestEv(a)));
+        } else if (FC.sort === "stake") {
+          out.sort((a, b) => (b.total_stake || 0) - (a.total_stake || 0));
+        }
+        return out;
+      }
+
+      function drawBar() {
+        bar.innerHTML = "";
+        const fg = el("div", { class: "gp" });
+        FILTERS.forEach(x => {
+          const c = el("button", { class: "chip", type: "button", text: x.label });
+          c.setAttribute("aria-pressed", String(FC.filter === x.id));
+          c.addEventListener("click", () => {
+            FC.filter = x.id;
+            remember("ea.fcfilter", x.id);
+            drawBar(); drawList(); drawDetail();
+          });
+          fg.appendChild(c);
+        });
+        bar.appendChild(fg);
+
+        if (venues.length > 1) {
+          const vg = el("div", { class: "gp" });
+          const all = el("button", { class: "chip", type: "button", text: "全場" });
+          all.setAttribute("aria-pressed", String(!FC.venue));
+          all.addEventListener("click", () => { FC.venue = null; drawBar(); drawList(); drawDetail(); });
+          vg.appendChild(all);
+          venues.forEach(v => {
+            const c = el("button", { class: "chip", type: "button", text: v });
+            c.setAttribute("aria-pressed", String(FC.venue === v));
+            c.addEventListener("click", () => { FC.venue = v; drawBar(); drawList(); drawDetail(); });
+            vg.appendChild(c);
+          });
+          bar.appendChild(vg);
+        }
+
+        const sel = el("select");
+        sel.setAttribute("aria-label", "並び順");
+        [["order", "開催順"], ["ev", "期待値順"], ["stake", "配分順"]].forEach(([v, t]) => {
+          const o = el("option", { value: v, text: t });
+          if (FC.sort === v) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.addEventListener("change", () => {
+          FC.sort = sel.value;
+          remember("ea.fcsort", sel.value);
+          drawList(); drawDetail();
+        });
+        bar.appendChild(sel);
+
+        const shown = visibleRaces();
+        bar.appendChild(el("span", { class: "cnt",
+          text: `${shown.length} / ${day.races.length} レース` +
+                (shown.length ? `　購入 ${shown.reduce((a, r) => a + r.n_bets, 0)} 点` : "") }));
+      }
+
       function drawList() {
+        FC.visible = visibleRaces();
+        if (!FC.visible.some(r => r.race_id === FC.raceId)) {
+          FC.raceId = (FC.visible[0] || {}).race_id || null;
+          FC.runnerId = null;
+        }
         list.innerHTML = "";
-        day.races.forEach(r => {
+        if (!FC.visible.length) {
+          list.appendChild(el("div", { class: "fc-empty", text: "この条件に合うレースはありません。" }));
+          return;
+        }
+        FC.visible.forEach(r => {
           const b = el("button", { class: "fc-race", type: "button" });
           b.setAttribute("aria-current", String(r.race_id === FC.raceId));
-          const top = el("div", { class: "top" });
-          top.appendChild(el("span", { class: "no", text: r.title }));
-          top.appendChild(el("span", { class: "cond", text: r.conditions }));
-          b.appendChild(top);
-          const pick = el("div", { class: "pick" });
-          const best = r.runners[0];
-          pick.appendChild(el("span", { text: `本命 ${best.entrant_id} ${F.pct(best.p_win)}` }));
-          pick.appendChild(el("span", { class: r.n_bets ? "tag-bet" : "tag-pass",
-            text: r.n_bets ? `購入 ${r.n_bets}点` : "見送り" }));
-          const settled = r.bets.filter(x => x.won !== null);
-          if (settled.length) {
-            const hit = settled.some(x => x.won);
-            pick.appendChild(el("span", { class: "res " + (hit ? "hit" : "miss"), text: hit ? "的中" : "外れ" }));
+          const hd = el("div", { class: "hd2" });
+          hd.appendChild(el("span", { class: "grade " + gradeClass(r.confidence),
+            text: r.confidence || "見送り" }));
+          hd.appendChild(el("span", { class: "no", text: r.title }));
+          hd.appendChild(el("span", { class: "cond", text: r.conditions }));
+          b.appendChild(hd);
+          const ln = el("div", { class: "ln" });
+          if (r.n_bets) {
+            const best = r.bets.slice().sort((x, y) => y.ev - x.ev)[0];
+            ln.appendChild(el("span", { class: "mk",
+              text: `${best.ticket_ja} ${best.selection.join("+")} ${F.fx(best.odds, 1)}倍` }));
+            ln.appendChild(el("span", { class: "evn", text: `EV ${F.fx(best.ev, 2)}` }));
+            if (r.n_bets > 1) ln.appendChild(el("span", { text: `ほか ${r.n_bets - 1} 点` }));
+            ln.appendChild(el("span", { class: "stk", text: F.yen(r.total_stake) }));
+          } else {
+            const best = r.runners[0];
+            ln.appendChild(el("span", { text:
+              `見送り — 最良でも期待値 ${F.fx(best.ev, 2)}` }));
           }
-          b.appendChild(pick);
-          b.addEventListener("click", () => { FC.raceId = r.race_id; FC.runnerId = null; drawList(); drawDetail(); });
+          b.appendChild(ln);
+          const done = r.bets.filter(x => x.won !== null);
+          if (done.length) {
+            const hit = done.some(x => x.won);
+            const res = el("div", { class: "ln" });
+            res.appendChild(el("span", { class: "res " + (hit ? "hit" : "miss"),
+              text: hit ? "的中" : "外れ" }));
+            const pl = done.reduce((a, x) => a + (x.profit || 0), 0);
+            res.appendChild(el("span", { class: "stk",
+              text: `${pl >= 0 ? "+" : ""}${F.yen(pl)}` }));
+            b.appendChild(res);
+          }
+          b.addEventListener("click", () => {
+            FC.raceId = r.race_id; FC.runnerId = null; drawList(); drawDetail();
+          });
           list.appendChild(b);
         });
       }
 
       function drawDetail() {
-        const r = day.races.find(x => x.race_id === FC.raceId) || day.races[0];
+        const r = day.races.find(x => x.race_id === FC.raceId);
         detail.innerHTML = "";
-        detail.appendChild(el("h3", { text: r.title }));
+        FC.copyRace = null;
+        if (!r) {
+          detail.appendChild(el("div", { class: "fc-empty", text: "左のレースを選んでください。" }));
+          return;
+        }
+        FC.copyRace = r.tip_text || null;
+        const dhd = el("div", { class: "dhd" });
+        dhd.appendChild(el("h3", { text: r.title }));
+        dhd.appendChild(el("span", { class: "grade " + gradeClass(r.confidence),
+          text: r.confidence || "見送り" }));
+        if (r.tip_text) dhd.appendChild(copyButton("買い目をコピー", () => r.tip_text));
+        detail.appendChild(dhd);
         detail.appendChild(el("div", { class: "cond",
           text: `${r.conditions} · ${r.race_class} · ${r.organizer || "JRA"}` }));
-        detail.appendChild(el("div", { class: "lead", text: r.summary }));
+        if (r.narrative) detail.appendChild(el("p", { class: "fc-narr", text: r.narrative }));
+        else detail.appendChild(el("div", { class: "lead", text: r.summary }));
 
         const sec1 = el("div", { class: "fc-sec" });
         sec1.appendChild(el("h4", { text: r.n_bets ? "買い目" : "このレースを見送る理由" }));
@@ -880,7 +1178,8 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
             t.appendChild(el("span", { class: "kind", text: b.ticket_ja }));
             t.appendChild(el("span", { class: "sel", text: b.selection.join(" + ") }));
             t.appendChild(el("span", { class: "num", text: `${F.fx(b.odds, 1)}倍` }));
-            t.appendChild(el("span", { class: "num", text: `予測 ${F.pct(b.prob)}` }));
+            t.appendChild(el("span", { class: "num",
+              text: `${b.ticket === "win" ? "勝率" : "的中率"} ${F.pct(b.prob)}` }));
             t.appendChild(el("span", { class: "num", text: `期待値 ${F.fx(b.ev, 3)}` }));
             t.appendChild(el("span", { class: "stake", text: F.yen(b.stake) }));
             if (b.won !== null) {
@@ -891,13 +1190,20 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
           });
           sec1.appendChild(el("div", { class: "fc-note", text:
             `期待値が閾値 ${day.policy.ev_threshold} を超えた買い目にだけ、ケリー基準の ${day.policy.alpha} 倍を配分しています。` +
-            "1 レースの投入上限は資金の 5%、1 点の上限は 3% です。" }));
+            "1 レースの投入上限は資金の 5%、1 点の上限は 3% です。" +
+            "「主力 / 対抗 / 押さえ」は、その日の最大配分に対する相対的な自信度です。" }));
         } else {
           const best = r.runners[0];
           sec1.appendChild(el("div", { class: "fc-pass", text:
             `最も期待値の高い ${best.entrant_id} でも ${F.fx(best.ev, 3)} で、閾値 ${day.policy.ev_threshold} に届きません。` +
             "賭けないことは判断であって、機会損失ではありません。控除率のあるレースでは、" +
             "優位が無いのに買えば確実に損をします。" }));
+        }
+        if (r.tip_text) {
+          const tip = el("div", { class: "fc-tip" });
+          tip.appendChild(el("pre", { text: r.tip_text }));
+          tip.appendChild(copyButton("コピー", () => r.tip_text));
+          sec1.appendChild(tip);
         }
         detail.appendChild(sec1);
 
@@ -940,8 +1246,27 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         const chosen = r.runners.find(x => x.entrant_id === FC.runnerId)
           || r.runners.find(x => x.decision.action === "bet") || r.runners[0];
         if (chosen) detail.appendChild(whyPanel(chosen));
+        detail.appendChild(el("div", { class: "fc-keys", html:
+          "キー操作: <kbd>j</kbd> <kbd>k</kbd> レース移動　<kbd>c</kbd> 買い目をコピー　" +
+          "<kbd>f</kbd> 絞り込みを切り替え" }));
       }
 
+      FC.select = (raceId) => {
+        FC.raceId = raceId;
+        FC.runnerId = null;
+        drawList();
+        drawDetail();
+        const cur = list.querySelector('.fc-race[aria-current="true"]');
+        if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest" });
+      };
+      FC.cycleFilter = () => {
+        const i = FILTERS.findIndex(x => x.id === FC.filter);
+        FC.filter = FILTERS[(i + 1) % FILTERS.length].id;
+        remember("ea.fcfilter", FC.filter);
+        drawBar(); drawList(); drawDetail();
+      };
+
+      drawBar();
       drawList();
       drawDetail();
     }
@@ -958,12 +1283,33 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       }
       box.appendChild(hd);
       box.appendChild(el("p", { class: "verdict", text: run.decision.reason }));
+
+      const reasons = run.reasons || {};
+      if ((reasons.for || []).length || (reasons.against || []).length) {
+        const rs = el("div", { class: "fc-reasons" });
+        const col = (cls, title, items, empty) => {
+          const c = el("div", { class: "col " + cls });
+          c.appendChild(el("h5", { text: title }));
+          if (items.length) {
+            const ul = el("ul");
+            items.forEach(t => ul.appendChild(el("li", { text: t })));
+            c.appendChild(ul);
+          } else {
+            c.appendChild(el("div", { class: "fc-note", style: "margin-top:0", text: empty }));
+          }
+          return c;
+        };
+        rs.appendChild(col("pro", "買える理由", reasons.for || [], "押し上げ材料はありません。"));
+        rs.appendChild(col("con", "気になる点", reasons.against || [], "目立った減点材料はありません。"));
+        box.appendChild(rs);
+      }
+
       const nonWin = (run.decision.tickets || []).filter(t => t !== "win");
       if (nonWin.length) {
-        box.appendChild(el("p", { class: "verdict", style: "margin-top:-6px", text:
+        box.appendChild(el("p", { class: "verdict", text:
           `下の確率は「1着になる確率」です。${nonWin.map(t => TICKET_JA[t] || t).join("・")}は着外に沈まない確率なので別の値で、` +
           "走り下り補正を通した Plackett-Luce から計算しています。勝つ見込みが薄い馬でも、" +
-          "複勝のオッズが割に合えば買い目になります。" }));
+          `${nonWin.map(t => TICKET_JA[t] || t).join("・")}のオッズが割に合えば買い目になります。` }));
       }
 
       const chain = el("div", { class: "fc-chain" });
@@ -999,7 +1345,8 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         });
         box.appendChild(fl);
         box.appendChild(el("div", { class: "fc-note", text:
-          "この内訳は決定木が出したスコアへの各特徴量の寄与で、合計するとスコアと厳密に一致します。" +
+          "上の文章はこの内訳を言い換えたものです。内訳は決定木が出したスコアへの各特徴量の寄与で、" +
+          "合計するとスコアと厳密に一致します。" +
           "確率そのものではなくスコアの説明である点に注意してください。" +
           "後段の Plackett-Luce・較正・市場ブレンドは、出走馬全体をまとめて変形するためです。" }));
       } else {
@@ -1009,9 +1356,36 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       return box;
     }
 
+    /* keyboard: only while the 予想 page is the visible one, and never inside a control */
+    if (!FC.bound) {
+      FC.bound = true;
+      document.addEventListener("keydown", (e) => {
+        if (!FC.root || !FC.root.offsetParent) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e.target;
+        if (t && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))) return;
+        const key = e.key.toLowerCase();
+        if (key === "j" || key === "k") {
+          if (!FC.visible.length || !FC.select) return;
+          const i = FC.visible.findIndex(r => r.race_id === FC.raceId);
+          const next = key === "j" ? Math.min(FC.visible.length - 1, i + 1) : Math.max(0, i - 1);
+          e.preventDefault();
+          FC.select(FC.visible[next].race_id);
+        } else if (key === "c") {
+          if (!FC.copyRace) return;
+          e.preventDefault();
+          const btn = FC.root.querySelector(".fc-tip .btn-c") || FC.root.querySelector(".dhd .btn-c");
+          if (btn) btn.click();
+        } else if (key === "f") {
+          if (!FC.cycleFilter) return;
+          e.preventDefault();
+          FC.cycleFilter();
+        }
+      });
+    }
+
     drawDates();
-    let start = null;
-    try { start = localStorage.getItem("ea.fcdate"); } catch (e) { start = null; }
+    const start = recall("ea.fcdate");
     selectDate(FC.index.some(row => row.date === start) ? start : FC.index[0].date);
     return wrap;
   }
