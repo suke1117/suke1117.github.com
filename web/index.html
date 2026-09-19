@@ -135,6 +135,46 @@ caption{caption-side:bottom; text-align:left; font-size:11.5px; color:var(--mute
 .cmp .v{text-align:right; font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
 .verdict{margin-top:12px; font-size:12.5px; color:var(--ink-2); border-left:3px solid var(--serious); padding:6px 0 6px 12px}
 
+/* roadmap board */
+.rm-intro{font-size:12.5px; color:var(--ink-2); margin:4px 0 14px; max-width:78ch}
+.ev{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:1px; background:var(--border);
+  border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:16px}
+.ev > div{background:var(--surface-2); padding:11px 13px}
+.ev .k{font-size:11px; color:var(--muted); font-weight:500}
+.ev .v{font-family:"IBM Plex Mono",monospace; font-size:17px; font-weight:600; letter-spacing:-.01em}
+.ev .d{font-size:11.5px; color:var(--ink-2); margin-top:3px}
+.filters{display:flex; gap:7px; flex-wrap:wrap; align-items:center; margin-bottom:16px; padding-bottom:13px;
+  border-bottom:1px solid var(--grid)}
+.filters .lbl{font-size:11px; color:var(--muted); font-weight:600; margin-right:2px}
+.filters .sep{flex-basis:100%; height:0}
+.chip{border:1px solid var(--border); background:var(--surface); color:var(--ink-2); border-radius:99px;
+  padding:4px 11px; font:inherit; font-size:11.5px; cursor:pointer; line-height:1.4}
+.chip:hover{background:var(--surface-3)}
+.chip[aria-pressed="true"]{background:var(--ink); color:var(--surface); border-color:var(--ink)}
+.chip:focus-visible{outline:2px solid var(--s1); outline-offset:2px}
+.pgroup{margin-bottom:20px}
+.pgroup:last-child{margin-bottom:4px}
+.pghead{display:flex; align-items:baseline; gap:10px; margin-bottom:9px}
+.pghead .tag-p{font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600; color:var(--surface);
+  background:var(--pc); border-radius:5px; padding:1px 7px}
+.pghead h3{font-size:13.5px; font-weight:600}
+.pghead .n{font-size:11.5px; color:var(--muted); margin-left:auto; font-variant-numeric:tabular-nums}
+.tasks{display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px}
+.task{border:1px solid var(--border); border-left:3px solid var(--pc); border-radius:8px; padding:12px 14px;
+  background:var(--surface-2); display:flex; flex-direction:column}
+.task .top{display:flex; gap:8px; align-items:baseline}
+.task .tid{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--muted); flex:none}
+.task h4{font-size:13px; font-weight:600; margin:0; line-height:1.5}
+.task .tags{display:flex; gap:5px; flex-wrap:wrap; margin:8px 0 9px}
+.tag{font-size:10.5px; border:1px solid var(--border); border-radius:4px; padding:1px 6px; color:var(--ink-2);
+  background:var(--surface); white-space:nowrap}
+.tag.blocked{border-color:var(--critical); color:var(--critical-ink)}
+.task p{margin:0; font-size:12px; color:var(--ink-2); line-height:1.7}
+.task .dod{margin-top:auto; padding-top:9px; font-size:11.5px; color:var(--ink-2)}
+.task .dod .h{display:block; font-size:10.5px; font-weight:600; color:var(--muted); letter-spacing:.03em; margin-top:9px;
+  padding-top:9px; border-top:1px solid var(--grid)}
+.rm-empty{padding:26px 0; text-align:center; color:var(--muted); font-size:12.5px}
+
 /* rules / footer */
 .rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px}
 .rules.six{grid-template-columns:repeat(3,1fr)}
@@ -405,6 +445,116 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     });
   }
 
+  /* ---------- roadmap board ---------- */
+  const PRIO = {
+    P0: { c: "--critical", t: "測定の土台", d: "これが無いと、以降の施策で精度が上がったかどうかを判定できない" },
+    P1: { c: "--serious",  t: "特徴量", d: "実データ上で精度を最も大きく動かす。欠けている情報を足す" },
+    P2: { c: "--s1",       t: "モデルと確率層", d: "同じ特徴量からより多くを引き出す。費用対効果の高い順" },
+    P3: { c: "--muted",    t: "市場と拡張", d: "実際に買える価格での検証と、券種・競技の拡大" },
+  };
+  const CAT = { validation: "検証", data: "データ", features: "特徴量", model: "モデル", probability: "確率", market: "市場" };
+  const EFFORT = { S: "1日以内", M: "数日", L: "1週間以上" };
+  const STATUS = { todo: "未着手", doing: "着手中", done: "完了", blocked: "待ち" };
+
+  function roadmapCard(R) {
+    const card = el("div", { class: "card" });
+    card.appendChild(el("h2", { text: "改善ロードマップ" }));
+    if (R.meta && R.meta.intro) card.appendChild(el("div", { class: "rm-intro", text: R.meta.intro }));
+
+    if ((R.evidence || []).length) {
+      const ev = el("div", { class: "ev" });
+      R.evidence.forEach(e => {
+        const d = el("div");
+        d.appendChild(el("div", { class: "k", text: e.label }));
+        d.appendChild(el("div", { class: "v", text: e.value }));
+        d.appendChild(el("div", { class: "d", text: e.detail }));
+        ev.appendChild(d);
+      });
+      card.appendChild(ev);
+    }
+
+    const state = { priority: "all", category: "all" };
+    const body = el("div");
+    const filters = el("div", { class: "filters" });
+    const chips = [];
+    const mkChip = (key, val, label) => {
+      const b = el("button", { class: "chip", type: "button", text: label });
+      b.setAttribute("aria-pressed", String(state[key] === val));
+      b.addEventListener("click", () => {
+        state[key] = val;
+        chips.forEach(c => c.b.setAttribute("aria-pressed", String(state[c.key] === c.val)));
+        draw();
+      });
+      chips.push({ b: b, key: key, val: val });
+      filters.appendChild(b);
+      return b;
+    };
+    filters.appendChild(el("span", { class: "lbl", text: "優先度" }));
+    mkChip("priority", "all", `すべて ${R.tasks.length}`);
+    Object.keys(PRIO).forEach(p => { if (R.counts[p]) mkChip("priority", p, `${p} ${R.counts[p]}`); });
+    filters.appendChild(el("span", { class: "sep" }));
+    filters.appendChild(el("span", { class: "lbl", text: "分野" }));
+    mkChip("category", "all", "すべて");
+    (R.categories || []).forEach(c => mkChip("category", c, CAT[c] || c));
+    card.appendChild(filters);
+    card.appendChild(body);
+
+    function draw() {
+      body.innerHTML = "";
+      const shown = R.tasks.filter(t =>
+        (state.priority === "all" || t.priority === state.priority) &&
+        (state.category === "all" || t.category === state.category));
+      if (!shown.length) {
+        body.appendChild(el("div", { class: "rm-empty", text: "この条件に合うタスクはありません。" }));
+        return;
+      }
+      Object.keys(PRIO).forEach(pk => {
+        const list = shown.filter(t => t.priority === pk);
+        if (!list.length) return;
+        const g = el("div", { class: "pgroup", style: `--pc:var(${PRIO[pk].c})` });
+        const hd = el("div", { class: "pghead" });
+        hd.appendChild(el("span", { class: "tag-p", text: pk }));
+        hd.appendChild(el("h3", { text: PRIO[pk].t }));
+        hd.appendChild(el("span", { class: "n", text: `${list.length} 件` }));
+        g.appendChild(hd);
+        g.appendChild(el("div", { class: "rm-intro", text: PRIO[pk].d }));
+        const grid = el("div", { class: "tasks" });
+        list.forEach(t => {
+          const c = el("div", { class: "task" });
+          const top = el("div", { class: "top" });
+          top.appendChild(el("span", { class: "tid", text: t.id }));
+          top.appendChild(el("h4", { text: t.title }));
+          c.appendChild(top);
+          const tags = el("div", { class: "tags" });
+          tags.appendChild(el("span", { class: "tag", text: CAT[t.category] || t.category }));
+          tags.appendChild(el("span", { class: "tag", text: `工数 ${EFFORT[t.effort] || t.effort}` }));
+          tags.appendChild(el("span", { class: "tag", text: `効く指標: ${t.impact}` }));
+          tags.appendChild(el("span", { class: "tag" + (t.status === "blocked" ? " blocked" : ""),
+            text: STATUS[t.status] || t.status }));
+          c.appendChild(tags);
+          c.appendChild(el("p", { text: t.why }));
+          const dod = el("div", { class: "dod" });
+          dod.appendChild(el("span", { class: "h", text: "完了条件" }));
+          dod.appendChild(el("span", { text: t.done }));
+          if (t.blocked_by) {
+            dod.appendChild(el("span", { class: "h", text: "待っているもの" }));
+            dod.appendChild(el("span", { text: t.blocked_by }));
+          }
+          if ((t.depends || []).length) {
+            dod.appendChild(el("span", { class: "h", text: "先に必要なタスク" }));
+            dod.appendChild(el("span", { text: t.depends.join(" · ") }));
+          }
+          c.appendChild(dod);
+          grid.appendChild(c);
+        });
+        g.appendChild(grid);
+        body.appendChild(g);
+      });
+    }
+    draw();
+    return card;
+  }
+
   /* ---------- page ---------- */
   function build(D) {
     const app = document.getElementById("app");
@@ -467,6 +617,9 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     kp.appendChild(tile("最終資金", F.yen(K.final_bankroll), `元手 ${F.yen(K.start_bankroll)}`));
     kp.appendChild(tile("平均期待値", F.fx(K.avg_ev_bet), `閾値 ${F.fx(P.ev_threshold)} を超えた馬だけ購入`));
     add(kp);
+
+    /* improvement roadmap - placed here because the KPIs above are what it exists to make trustworthy */
+    if (D.roadmap && (D.roadmap.tasks || []).length) add(roadmapCard(D.roadmap));
 
     /* equity curve */
     const c1 = el("div", { class: "card" });

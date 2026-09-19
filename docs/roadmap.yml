@@ -1,0 +1,322 @@
+# EquineAlpha 改善ロードマップ
+#
+# ダッシュボード (web/index.html) に表示される。編集したら make dashboard で反映。
+# status: todo | doing | done | blocked
+# effort: S (1日以内) | M (数日) | L (1週間以上)
+
+meta:
+  updated: "2026-09-19"
+  intro: >-
+    精度を上げる前に、精度が上がったと言えるだけの測定精度を確保する。
+    現在の回収率の信頼区間は幅が 20 ポイント以上あり、数ポイントの改善は区別できない。
+    この順序は「測定 → 特徴量 → モデル → 市場」で、上から順に、下流の施策の効果を判定できる状態を作っていく。
+
+# 順序の根拠となる実測値。2022-01-01〜2023-12-31 の合成データ、α=0.1 / EV≥1.05 の設定で測定。
+evidence:
+  - label: "回収率 (投入額加重)"
+    value: "116.4%"
+    detail: "日単位ブロック・ブートストラップの 95% 区間は [103.9%, 128.8%]。幅が ±12 ポイントある。"
+  - label: "回収率 (1点等重み)"
+    value: "108.1%"
+    detail: "t = 1.69 で 95% 有意に届かない。加重値との 8 ポイント差はエッジではなく複利の分布効果。"
+  - label: "ホールドアウトの標準誤差"
+    value: "約 14 ポイント"
+    detail: "974 点・1点あたり収益の標準偏差 4.44 から算出。115.4% は単独では 100% と区別できない。"
+  - label: "モデル単体の予測 1 位的中率"
+    value: "29.2%"
+    detail: "1 番人気の 29.8% を下回る。現在の利益は市場ブレンドが生んでおり、モデル自体は市場に勝てていない。"
+
+tasks:
+  # ---------------------------------------------------------------- P0
+  - id: V1
+    title: 回収率とシャープの信頼区間をブロック・ブートストラップで出す
+    category: validation
+    priority: P0
+    effort: S
+    status: todo
+    impact: 測定精度
+    why: >-
+      現在は点推定しか出しておらず、施策の前後で回収率が 3 ポイント動いても、
+      それが改善なのか偶然なのか判定できない。同一レース内のベットは排反事象で相関するため、
+      1 点単位ではなく開催日単位のブロックで再標本化する必要がある。
+    done: >-
+      metrics.py が回収率・シャープ・ドローダウンの 95% 区間を返し、
+      ダッシュボードが区間付きで表示する。区間が 100% をまたぐ場合はその旨を明示する。
+    files: [src/backtest/metrics.py, src/web/export_dashboard.py, web/index.html]
+
+  - id: V2
+    title: 投入額加重と 1 点等重みの回収率を分けて報告する
+    category: validation
+    priority: P0
+    effort: S
+    status: todo
+    impact: 測定精度
+    why: >-
+      複利で賭けていると後半のベットほど金額が大きく、当たりが後半に偏っただけで加重回収率が上振れする。
+      実測では加重 116.4% に対し等重み 108.1% で、8 ポイントの差が意思決定の質とは無関係に出ている。
+      施策の評価には等重みのほうが適切で、資金曲線の評価には加重が適切なので、両方を併記する。
+    done: summary.json が両方を持ち、ダッシュボードが並べて表示する。
+    files: [src/backtest/metrics.py]
+
+  - id: V3
+    title: パラメータ探索の選択バイアスを定量化する
+    category: validation
+    priority: P0
+    effort: M
+    status: todo
+    impact: 測定精度
+    why: >-
+      108 点のグリッドから最良を選べば、探索期間の成績は定義上必ず上振れする。
+      現在は探索とホールドアウトの差 (-24.9 ポイント) を表示するだけで、
+      そのうちどれだけが選択バイアスで、どれだけが本物の劣化かを分離していない。
+      これが分からないと、ハイパーパラメータ探索に進んだ瞬間に嘘が増える。
+    done: >-
+      着順をシャッフルしたデータで同じ探索を回し、エッジがゼロのときにグリッド最良値が
+      どれだけ上振れするかを測る。その期待上振れ幅を sweep の出力に含める。
+    depends: [V1]
+    files: [src/backtest/sweep.py]
+
+  - id: D1
+    title: 実データを投入してベースラインを測り直す
+    category: data
+    priority: P0
+    effort: L
+    status: blocked
+    blocked_by: JRA-VAN Data Lab. の契約と、JV-Link を動かす Windows 環境
+    impact: 全指標
+    why: >-
+      現在の数値はすべて合成データ。合成の潜在構造は特徴量が復元できるように作ってあるため、
+      エッジの大きさ自体に意味はない。実データでの較正誤差・回収率・ドローダウンだけが基準線になる。
+      特徴量を増やす作業は、実データが入ってからでないと効果を測れない。
+    done: >-
+      JRA-VAN の CSV で Phase 1〜4b が通り、合成データとの差分 (的中率、較正誤差、回収率) が
+      docs に記録される。
+    files: [raw_data/, src/data/sources/jravan_csv.py]
+
+  # ---------------------------------------------------------------- P1
+  - id: F1
+    title: ペースと展開を推定する特徴量
+    category: features
+    priority: P1
+    effort: L
+    status: todo
+    impact: 対数損失
+    why: >-
+      日本の競馬予想で最重要とされる因子が、現在は完全に欠落している。
+      通過順位 (JV-Data SE の corner 情報) から各馬の脚質を推定し、出走馬の構成から想定ペースを作る。
+      逃げ馬が多いレースでは先行勢が総崩れするといった相互作用は、個体能力の集計だけでは表現できない。
+      現在のモデルが 1 番人気に勝てていない理由の相当部分がここにあると見ている。
+    done: >-
+      各馬の脚質分布 (as-of)、レースの想定ペース指標、脚質 × 想定ペースの交互作用が特徴量に入り、
+      ホールドアウトの対数損失が改善する。
+    depends: [D1, V1]
+    files: [src/data/features.py, src/data/sources/jravan_csv.py]
+
+  - id: F2
+    title: 馬場差を推定して絶対スピード指数に変換する
+    category: features
+    priority: P1
+    effort: M
+    status: todo
+    impact: 対数損失
+    why: >-
+      現在のスピード指数はレース内で標準化しているため、レース間の比較ができない。
+      「弱いメンバー相手の楽勝」と「強いメンバー相手の接戦」が同じ値になってしまう。
+      開催日 × コース × 馬場状態ごとの基準タイムを推定して差し引けば、絶対的な能力比較ができる。
+    done: >-
+      日 × コース単位の馬場差を推定するモジュールと、それを用いた絶対スピード指数。
+      推定には当該開催日より前のレースのみを使い、as-of 制約を破らないこと。
+    depends: [D1]
+    files: [src/data/features.py]
+
+  - id: F3
+    title: 血統特徴量 (種牡馬・母父の適性)
+    category: features
+    priority: P1
+    effort: M
+    status: todo
+    impact: 対数損失 (特に若駒戦)
+    why: >-
+      出走履歴が 1〜2 戦しかない 2〜3 歳馬では、個体の過去成績よりも血統のほうが情報量が多い。
+      新馬・未勝利は全レースの相当部分を占めるのに、現在そこでは実質的に無情報で予測している。
+      JV-Data の UM/HN/SK から、父と母父ごとの芝ダート適性・距離適性・馬場適性を
+      当該レース以前の産駒成績として集計する。
+    done: 種牡馬と母父の as-of 集計が入り、キャリア 2 戦以下のサブセットで対数損失が改善する。
+    depends: [D1]
+    files: [src/data/features.py, src/data/sources/jravan_csv.py]
+
+  - id: F4
+    title: 調教データの取り込み
+    category: features
+    priority: P1
+    effort: M
+    status: todo
+    impact: 対数損失 (特に休養明け)
+    why: >-
+      追切のタイム・本数・コース・直前の負荷は、休養明けの仕上がりを直接見られる唯一の情報。
+      現在は前走からの間隔 (days_since) しか持っておらず、休み明けが good か太め残りかを区別できない。
+    done: JV-Data HC 由来の調教特徴量が入り、休養明け (60 日以上) のサブセットで対数損失が改善する。
+    depends: [D1]
+    files: [src/data/features.py, src/data/sources/jravan_csv.py]
+
+  - id: F5
+    title: 枠順・コースバイアスの as-of 集計
+    category: features
+    priority: P1
+    effort: S
+    status: todo
+    impact: 対数損失
+    why: >-
+      小回りの内枠有利、重馬場の外枠不利といった傾向は実在するが、現在は枠番と馬番を生値で渡し、
+      コース条件との交互作用を木に見つけさせているだけ。
+      競馬場 × 距離 × 馬場状態ごとの枠順別成績を集計して直接与えたほうが、少ないデータで学習できる。
+    done: 枠順バイアスの as-of 集計が特徴量に入る。
+    depends: [D1]
+    files: [src/data/features.py]
+
+  - id: F6
+    title: 騎手・厩舎の条件別集計と乗り替わり
+    category: features
+    priority: P1
+    effort: S
+    status: todo
+    impact: 対数損失
+    why: >-
+      現在の騎手特徴量は全条件こみの勝率と平均着順のみ。
+      コース別・距離別の騎手成績、継続騎乗か乗り替わりか、厩舎と騎手の組み合わせは、
+      実務の予想では標準的に使われている。
+    done: 条件別の騎手集計、乗り替わりフラグ、騎手 × 厩舎の集計が入る。
+    files: [src/data/features.py]
+
+  # ---------------------------------------------------------------- P2
+  - id: M1
+    title: シード平均アンサンブル
+    category: model
+    priority: P2
+    effort: S
+    status: todo
+    impact: 対数損失
+    why: >-
+      単一シードの勾配ブースティングは分散が大きく、特に木の分割がランダム性に左右される。
+      5〜10 シードの平均は実装が軽く、ほぼ確実に対数損失を下げる。
+      ハイパーパラメータ探索より先にやるべきで、費用対効果が最も高いモデル側の施策。
+    done: 複数シードの平均スコアで推論し、ホールドアウトの対数損失が単一シードより改善する。
+    files: [src/models/ranker.py, src/models/train_lgbm.py]
+
+  - id: C1
+    title: フィールドサイズ別の確率較正
+    category: probability
+    priority: P2
+    effort: S
+    status: todo
+    impact: 較正誤差 (ECE)
+    why: >-
+      Plackett-Luce の温度と等調回帰が全体で 1 本しかない。
+      8 頭立てと 18 頭立てではスコアの分散も勝率の水準も違うため、
+      片方に合わせた較正はもう片方を歪める。ケリー基準は確率の正しさを前提に賭け金を決めるので、
+      ここの歪みはそのまま資金管理の歪みになる。
+    done: 頭数バケット別に温度と較正曲線を持ち、全バケットで ECE が改善する。
+    files: [src/models/calibration.py, src/models/plackett_luce.py]
+
+  - id: C2
+    title: 2 着・3 着確率の Henery 補正
+    category: probability
+    priority: P2
+    effort: M
+    status: todo
+    impact: 複数券種の較正誤差
+    why: >-
+      Plackett-Luce (Harville 型) は 1 着確率から 2 着・3 着を導くとき、
+      強い馬の連対率を系統的に過大評価することが知られている。
+      べき乗ディスカウント (Stern / Henery 型) を導入し、実測の着順分布でパラメータをフィットする。
+      複勝・馬連・3 連単に手を広げる前の必須条件。
+    done: 2 着・3 着の予測分布が実測と一致し、複勝確率の ECE が現在の Harville 版より改善する。
+    files: [src/models/plackett_luce.py]
+
+  - id: M2
+    title: リセンシー重み付き学習
+    category: model
+    priority: P2
+    effort: S
+    status: todo
+    impact: 対数損失
+    why: >-
+      2018 年のレースと 2023 年のレースを同じ重みで学習している。
+      馬場改修、調教技術の変化、騎手の世代交代でデータの性質は動くため、指数減衰の重みを入れる。
+      半減期はウォークフォワードで選ぶ。
+    done: サンプル重みが入り、半減期をウォークフォワードで選んだ結果が現状より改善する。
+    files: [src/models/ranker.py]
+
+  - id: M3
+    title: ハイパーパラメータ探索
+    category: model
+    priority: P2
+    effort: M
+    status: todo
+    impact: 対数損失
+    why: >-
+      現在のパラメータは決め打ち。ただし探索空間を広げるほど選択バイアスが増えるため、
+      V3 で上振れ幅を測れるようにしてから着手する。順序を逆にすると、改善したように見えて
+      実際には過学習しただけ、という結果を判別できない。
+    done: 時系列分割上での探索が実装され、V3 の枠組みで選択バイアスを差し引いた上で改善している。
+    depends: [V3, M1]
+    files: [src/models/train_lgbm.py]
+
+  # ---------------------------------------------------------------- P3
+  - id: K1
+    title: 締切前オッズの時系列を取り込む
+    category: market
+    priority: P3
+    effort: L
+    status: todo
+    impact: 回収率の現実性
+    why: >-
+      バックテストは確定オッズで精算し、5% のオッズ控除で代用している。
+      実際には締切数分前のオッズでしか買えず、人気馬ほど直前に売れてオッズが下がる。
+      期待値の計算がオッズに直接依存する以上、この当てずっぽうの控除率は最終的に実測に置き換える必要がある。
+    done: 締切前オッズの時系列が取り込まれ、odds_haircut が実測のオッズドリフトに置き換わる。
+    files: [src/data/sources/jravan_csv.py, src/backtest/simulator.py]
+
+  - id: K2
+    title: 人気薄バイアスの明示的モデル化
+    category: market
+    priority: P3
+    effort: M
+    status: todo
+    impact: 回収率
+    why: >-
+      オッズから逆算した確率は、人気薄を過大評価し人気馬を過小評価することが知られている
+      (favourite-longshot bias)。現在は Benter ブレンドが暗黙にこれを吸収しているが、
+      オッズ帯ごとの補正を明示的に持たせたほうが、どこでエッジが出ているかを説明できる。
+    done: オッズ帯別の市場確率補正が入り、オッズ帯別の回収率が均されるか、偏りの理由が説明できる。
+    depends: [C1]
+    files: [src/models/market_blend.py]
+
+  - id: K3
+    title: 複勝・馬連への拡張
+    category: market
+    priority: P3
+    effort: M
+    status: todo
+    impact: ベット機会の増加
+    why: >-
+      Plackett-Luce 層は既に複勝・馬連・3 連単の確率を出せる。
+      単勝より控除率が低い券種や、相関の取り方で歪みが残りやすい券種にエッジがある可能性がある。
+      ただし確率が正しいことが前提なので C2 が先。
+    done: 複数券種のオッズが取り込まれ、券種横断で期待値順にケリー配分できる。
+    depends: [C2, K1]
+    files: [src/betting/strategy.py, src/backtest/simulator.py]
+
+  - id: X1
+    title: 競輪・競艇アダプタ
+    category: data
+    priority: P3
+    effort: M
+    status: todo
+    impact: 対象競技の拡大
+    why: >-
+      DataSource を継承したアダプタを 1 つ書けば、学習・較正・ベッティング・バックテストはそのまま動く。
+      競艇は 6 艇固定でコース別の決まり手が強く効くため、競馬より予測しやすい可能性がある。
+      ただし同日複数走があるため、特徴量の as-of キーを日付から日付 + レース番号に変える必要がある。
+    done: 競艇のデータソースが実装され、Phase 1〜4b が競艇データで通る。
+    files: [src/data/sources/, src/data/features.py, src/common/sport.py]

@@ -24,6 +24,7 @@ src/
   backtest/    ウォークフォワード・ペーパーベッティング simulator.py CLI, パラメータ探索 sweep.py CLI, metrics.py
   web/         ダッシュボード用データ書き出し export_dashboard.py, 単体HTMLビルド build_static.py
 web/           静的ダッシュボード (index.html + data.json)
+docs/roadmap.yml  優先度つき改善タスク (ダッシュボードに表示される)
 tests/         pytest (リーク検査・確率整合性・Kelly 制約を含む)
 raw_data/      JRA-VAN CSV エクスポート置き場 (git 管理外)
 processed/     前処理済み特徴量 (git 管理外)
@@ -77,7 +78,16 @@ python -m pytest tests/ -q
 
 全フェーズの CLI を順に流す統合チェック: `make all` (Makefile 参照)。
 
-## 5. Extension to Keirin / Kyotei
+## 5. Improvement Roadmap
+
+改善タスクは `docs/roadmap.yml` に構造化して管理し、`src/web/export_dashboard.py` 経由でダッシュボードに表示する。
+タスクを追加・更新したら `make dashboard` を実行すること。必須項目 (id/title/category/priority/effort/status/impact/why/done)、
+優先度の値、依存 id の存在、循環依存は読み込み時とテストで検証される。
+
+優先順位の原則: 測定精度 (P0) → 特徴量 (P1) → モデル・確率層 (P2) → 市場・拡張 (P3)。
+測定の信頼区間が施策の効果量より広い状態で下流に進まないこと。
+
+## 6. Extension to Keirin / Kyotei
 
 - 競技固有の定数は `src/common/sport.py` の `SportSpec` に集約する（最大出走数、券種、ベット単位）。
 - 新しい競技を追加する場合は `src/data/sources/base.py` の `DataSource` を継承し、正規化スキーマ (`src/data/schema.py`) の `races` / `entries` テーブルを返すアダプタを実装するだけでよい。学習・較正・ベッティング・バックテストのコアは競技非依存である。

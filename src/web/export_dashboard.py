@@ -10,6 +10,7 @@ page can be regenerated after any backtest instead of being hand-maintained.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -19,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import click  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+import yaml  # noqa: E402
 
 from src.common.logging_utils import get_logger  # noqa: E402
 
@@ -107,6 +109,57 @@ def sweep_rows(grid: pd.DataFrame) -> List[Dict]:
              "total_return": _num(r.total_return)} for r in grid.itertuples()]
 
 
+#: YAML folded scalars join wrapped lines with a space, which shows up as a gap
+#: mid-sentence in Japanese. Drop a space only when both neighbours are non-ASCII.
+_CJK_GAP = re.compile(r"(?<=[^\x00-\x7F])[ \t]+(?=[^\x00-\x7F])")
+TEXT_FIELDS = ("title", "why", "done", "impact", "blocked_by")
+
+
+def normalize_text(value):
+    return _CJK_GAP.sub("", value.strip()) if isinstance(value, str) else value
+
+
+PRIORITY_ORDER = ["P0", "P1", "P2", "P3"]
+REQUIRED_TASK_FIELDS = ("id", "title", "category", "priority", "effort", "status", "impact", "why", "done")
+
+
+def load_roadmap(path: Path) -> Dict:
+    """Read the improvement backlog and check it before the page has to render it.
+
+    A malformed entry is a broken card on the dashboard, so the errors are
+    raised here where the message is readable rather than in the browser.
+    """
+    if not path.exists():
+        log.warning("%s not found; the dashboard will hide the roadmap section", path)
+        return {}
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    tasks = doc.get("tasks", [])
+    ids = {t.get("id") for t in tasks}
+    for t in tasks:
+        missing = [f for f in REQUIRED_TASK_FIELDS if not t.get(f)]
+        if missing:
+            raise ValueError(f"roadmap task {t.get('id', '?')} is missing: {missing}")
+        if t["priority"] not in PRIORITY_ORDER:
+            raise ValueError(f"roadmap task {t['id']} has unknown priority '{t['priority']}'")
+        unknown = [d for d in (t.get("depends") or []) if d not in ids]
+        if unknown:
+            raise ValueError(f"roadmap task {t['id']} depends on unknown ids: {unknown}")
+    if len(ids) != len(tasks):
+        raise ValueError("roadmap contains duplicate task ids")
+    for t in tasks:
+        for f in TEXT_FIELDS:
+            if f in t:
+                t[f] = normalize_text(t[f])
+    meta = {k: normalize_text(v) for k, v in (doc.get("meta") or {}).items()}
+    evidence = [{k: normalize_text(v) for k, v in e.items()} for e in (doc.get("evidence") or [])]
+    tasks = sorted(tasks, key=lambda t: (PRIORITY_ORDER.index(t["priority"]), t["id"]))
+    counts: Dict[str, int] = {}
+    for t in tasks:
+        counts[t["priority"]] = counts.get(t["priority"], 0) + 1
+    return {"meta": meta, "evidence": evidence, "tasks": tasks, "counts": counts,
+            "categories": sorted({t["category"] for t in tasks})}
+
+
 def model_block(metrics: Dict) -> Dict:
     test = metrics.get("test", {})
     return {
@@ -129,9 +182,11 @@ def model_block(metrics: Dict) -> Dict:
 @click.option("--backtest_dir", default="backtest_results/", show_default=True)
 @click.option("--model_dir", default="artifacts/", show_default=True)
 @click.option("--sweep_dir", default="backtest_results/sweep/", show_default=True)
+@click.option("--roadmap", "roadmap_path", default="docs/roadmap.yml", show_default=True)
 @click.option("--output", default="web/data.json", show_default=True)
 @click.option("--data_note", default=None, help="one line describing the data source shown on the dashboard")
-def main(backtest_dir: str, model_dir: str, sweep_dir: str, output: str, data_note: Optional[str]) -> None:
+def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, output: str,
+         data_note: Optional[str]) -> None:
     bt, md, sw = Path(backtest_dir), Path(model_dir), Path(sweep_dir)
     summary = json.loads((bt / "summary.json").read_text()) if (bt / "summary.json").exists() else {}
     metrics = json.loads((md / "metrics.json").read_text()) if (md / "metrics.json").exists() else {}
@@ -174,13 +229,15 @@ def main(backtest_dir: str, model_dir: str, sweep_dir: str, output: str, data_no
         "features": [{"name": str(i), "gain": _num(g)} for i, g in features["gain"].head(15).items()]
         if not features.empty else [],
         "sweep": {"grid": sweep_rows(grid), "summary": sweep_summary},
+        "roadmap": load_roadmap(Path(roadmap_path)),
     }
 
     out = Path(output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
-    log.info("wrote %s (%.1f KB) | equity %d pts | sweep %d pts | bets %d",
-             out, out.stat().st_size / 1024, len(payload["equity"]), len(payload["sweep"]["grid"]), len(bets))
+    log.info("wrote %s (%.1f KB) | equity %d pts | sweep %d pts | bets %d | roadmap %d tasks",
+             out, out.stat().st_size / 1024, len(payload["equity"]), len(payload["sweep"]["grid"]), len(bets),
+             len(payload["roadmap"].get("tasks", [])))
 
 
 if __name__ == "__main__":
