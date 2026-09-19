@@ -121,3 +121,29 @@ def test_the_two_recovery_rates_diverge_when_stakes_do():
     assert stake_weighted_recovery(arr) > per_bet_recovery(arr)
     even = np.array([[100.0, -100.0], [100.0, 300.0]])
     assert stake_weighted_recovery(even) == pytest.approx(per_bet_recovery(even))
+
+
+# --------------------------------------------------------------------------
+# V4: a contribution has to survive more than one stretch of racing
+# --------------------------------------------------------------------------
+def test_walk_forward_windows_do_not_overlap_and_move_forward(small_table):
+    from src.models.ablation import walk_forward_windows
+
+    table, _ = small_table
+    wins = walk_forward_windows(table, 3, test_frac=0.12)
+    assert len(wins) == 3
+    prev_end = None
+    for tr, ca, te in wins:
+        assert tr["race_date"].max() < ca["race_date"].min()
+        assert ca["race_date"].max() < te["race_date"].min()
+        if prev_end is not None:
+            assert te["race_date"].min() > prev_end, "holdouts must not overlap"
+        prev_end = te["race_date"].max()
+
+
+def test_too_many_windows_is_refused_rather_than_silently_shrunk(small_table):
+    from src.models.ablation import walk_forward_windows
+
+    table, _ = small_table
+    with pytest.raises(ValueError, match="too little history"):
+        walk_forward_windows(table, 20)

@@ -1027,7 +1027,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
   function livePage(D) {
     const wrap = el("div");
     LIVE.root = wrap;
-    wrap.appendChild(el("div", { class: "loading", text: "ローカル API に接続しています…" }));
+    wrap.appendChild(el("div", { class: "loading", text: "台帳を読み込んでいます…" }));
     return wrap;
   }
 
@@ -1038,11 +1038,9 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     box.appendChild(el("span", { class: "dot-live off" }));
     const body = el("div");
     body.appendChild(el("p", { html:
-      "<b>ローカル API に接続していません。</b>このページだけはライブのデータを読みます。" +
-      "公開されているダッシュボードは静的なスナップショットなので、当日の予想はご自身の環境で以下を実行してください。" }));
+      "<b>ローカル API に接続していません。</b>ペーパー口座の残高と履歴は台帳から読むため、" +
+      "ご自身の環境で以下を実行してください。買い目とその根拠は「予想」ページにあります。" }));
     body.appendChild(el("pre", { text: SETUP_STEPS }));
-    body.appendChild(el("p", { style: "margin:8px 0 0", text:
-      "起動後、同じアドレス (既定は http://127.0.0.1:8787) でこのページを開くと、ここに当日の出走表と推奨購入が並びます。" }));
     if (reason) body.appendChild(el("p", { style: "margin:6px 0 0; font-size:11.5px; color:var(--muted)",
       text: "接続時のエラー: " + reason }));
     box.appendChild(body);
@@ -1074,14 +1072,12 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     const box = el("div", { class: "live-state" });
     box.appendChild(el("span", { class: "dot-live" }));
     const meta = el("div");
-    meta.appendChild(el("p", { html: slip
-      ? `<b>${slip.date} の出走表を読み込みました。</b>データ元 <span class="mono">${slip.provider}</span>、` +
-        `作成 ${slip.generated_at}。方針は α=${slip.policy.alpha} / EV≥${slip.policy.ev_threshold} / ` +
-        `1レース${slip.policy.max_bets_per_race}点 (${slip.policy.source === "sweep" ? "探索で選ばれた値" : slip.policy.source})。`
-      : "<b>API には接続できていますが、まだ当日の予想がありません。</b>" }));
-    if (!slip) meta.appendChild(el("pre", { text: "python src/live/paper_trader.py bet --provider demo" }));
-    else if ((dates || []).length > 1) meta.appendChild(el("p", { style: "margin:0; font-size:11.5px; color:var(--muted)",
-      text: `保存されている日: ${dates.slice(-6).join(" / ")}` }));
+    meta.appendChild(el("p", { style: "margin:0", html: S && S.n_bets
+      ? `<b>台帳に ${F.num(S.n_bets)} 点が記録されています。</b>` +
+        `${S.first_bet === S.last_bet ? S.first_bet : S.first_bet + " 〜 " + S.last_bet}。` +
+        "台帳は追記のみで、決済しても過去の行を書き換えません。結果を知る前に何を決めたかが残ります。"
+      : "<b>API には接続できていますが、まだ記録がありません。</b>" }));
+    if (!S || !S.n_bets) meta.appendChild(el("pre", { text: "python src/live/paper_trader.py bet --provider demo" }));
     box.appendChild(meta);
     wrap.appendChild(box);
 
@@ -1103,71 +1099,22 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       kp.appendChild(tile("損益", (S.total_profit >= 0 ? "+" : "") + F.yen(S.total_profit),
         `投入 ${F.yen(S.total_staked)}`));
       kp.appendChild(tile("未確定", F.num(S.n_open), `${F.yen(S.at_risk)} が確定待ち`));
-      kp.appendChild(tile("期間", S.first_bet === S.last_bet ? S.first_bet : `${S.first_bet} 〜`,
-        `${F.num(S.n_bets)} 点`));
-      const sm0 = slip && slip.summary ? slip.summary : {};
-      kp.appendChild(tile("直近の平均オッズ", sm0.avg_odds == null ? "—" : F.fx(sm0.avg_odds, 1) + "倍",
-        sm0.avg_ev == null ? "" : `平均期待値 ${F.fx(sm0.avg_ev)}`));
+      kp.appendChild(tile("使える資金", F.yen(S.available), "未確定分を差し引いた額"));
       wrap.appendChild(kp);
     }
 
     if (slip) {
       const c = el("div", { class: "card" });
-      c.appendChild(el("h2", { text: `${slip.date} の推奨購入` }));
+      c.appendChild(el("h2", { text: `直近の予想 (${slip.date})` }));
       const sm = slip.summary;
-      c.appendChild(el("div", { class: "desc", text: sm.n_bets
-        ? `${sm.n_races} レース中 ${sm.n_races_bet} レースで期待値が閾値を超えました。` +
-          `合計 ${F.yen(sm.total_stake)}、平均期待値 ${F.fx(sm.avg_ev)}、平均 ${F.fx(sm.avg_odds, 1)} 倍。` +
-          `賭けない判断のほうが多いのが正常です。`
-        : "期待値が閾値を超えた馬はいませんでした。見送りはシステムが働いている状態であって、失敗ではありません。" }));
-      if (sm.n_bets) {
-        const tw = el("div", { class: "tw" });
-        const t = el("table");
-        t.innerHTML = "<thead><tr><th>レース</th><th>馬番・馬</th><th>オッズ</th><th>予測勝率</th><th>期待値</th>" +
-          "<th>購入額</th></tr></thead><tbody>" + slip.bets.map(b => {
-            const race = slip.races.find(r => r.race_id === b.race_id) || {};
-            const run = (race.runners || []).find(r => r.entrant_id === b.entrant_id) || {};
-            return `<tr><td class="num">${race.venue || ""} ${race.race_no || ""}R</td>` +
-              `<td class="num">${run.post_position != null ? run.post_position + "番 " : ""}${b.entrant_id}</td>` +
-              `<td class="num">${F.fx(b.odds, 1)}</td><td class="num">${F.pct(b.prob)}</td>` +
-              `<td class="num">${F.fx(b.ev, 3)}</td><td class="num">${F.yen(b.stake)}</td></tr>`;
-          }).join("") + "</tbody>";
-        t.appendChild(el("caption", { text:
-          `資金 ${F.yen(slip.bankroll)} に対して ${(sm.total_stake / slip.bankroll * 100).toFixed(2)}% を投入。` +
-          `1 日の上限は ${F.pct(slip.policy.max_daily_exposure || 0.2, 0)}。` }));
-        tw.appendChild(t); c.appendChild(tw);
-      }
+      c.appendChild(el("div", { class: "desc", text:
+        `データ元 ${slip.provider}、作成 ${slip.generated_at}。` +
+        `方針は α=${slip.policy.alpha} / EV≥${slip.policy.ev_threshold} / 1レース${slip.policy.max_bets_per_race}点 ` +
+        `(${slip.policy.source === "sweep" ? "探索で選ばれた値" : slip.policy.source})。` +
+        (sm.n_bets ? `${sm.n_races} レース中 ${sm.n_races_bet} レースで ${sm.n_bets} 点、合計 ${F.yen(sm.total_stake)}。`
+                   : "期待値が閾値を超えた買い目はありませんでした。") +
+        "出走表と買い目の根拠は「予想」ページで見られます。" }));
       wrap.appendChild(c);
-
-      const cc = el("div", { class: "card" });
-      cc.appendChild(el("h2", { text: "出走表とモデルの確率" }));
-      cc.appendChild(el("div", { class: "desc", text:
-        "全レース分です。行が強調されているのが購入対象。期待値はモデルの勝率にオッズを掛けた値で、1.0 が損益分岐です。" }));
-      slip.races.forEach(r => {
-        const d = el("details", { class: "race-card" });
-        const sum = el("summary");
-        sum.appendChild(el("span", { class: "rno", text: `${r.venue || ""} ${r.race_no}R` }));
-        sum.appendChild(el("span", { class: "cond",
-          text: `${r.distance_m}m ${r.surface || ""} ${r.going || ""} ${r.n_runners}頭` }));
-        sum.appendChild(el("span", { class: "flag" + (r.n_bets ? "" : " none"),
-          text: r.n_bets ? `購入 ${r.n_bets} 点` : "見送り" }));
-        d.appendChild(sum);
-        const inner = el("div", { class: "inner tw" });
-        const t = el("table");
-        t.innerHTML = "<thead><tr><th>馬番</th><th>馬</th><th>騎手</th><th>オッズ</th><th>予測勝率</th><th>期待値</th>" +
-          "<th>購入額</th></tr></thead><tbody>" + r.runners.map(x =>
-            `<tr class="${x.stake > 0 ? "picked" : ""}"><td class="num">${x.post_position != null ? x.post_position : "—"}</td>` +
-            `<td class="num">${x.entrant_id}</td><td class="num">${x.jockey_id || "—"}</td>` +
-            `<td class="num">${x.win_odds == null ? "—" : F.fx(x.win_odds, 1)}</td>` +
-            `<td class="num">${F.pct(x.p_win)}</td>` +
-            `<td class="num" style="color:${(x.ev || 0) >= (slip.policy.ev_threshold || 1) ? "var(--good-ink)" : "var(--ink-2)"}">` +
-            `${x.ev == null ? "—" : F.fx(x.ev, 3)}</td>` +
-            `<td class="num">${x.stake > 0 ? F.yen(x.stake) : "—"}</td></tr>`).join("") + "</tbody>";
-        inner.appendChild(t);
-        d.appendChild(inner);
-        cc.appendChild(d);
-      });
-      wrap.appendChild(cc);
     }
 
     const daily = (summary && summary.daily) || [];
@@ -1175,7 +1122,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       const ch = el("div", { class: "card" });
       ch.appendChild(el("h2", { text: "確定した日ごとの記録" }));
       ch.appendChild(el("div", { class: "desc", text:
-        "台帳は追記のみで、決済しても過去の行は書き換えません。結果を知る前に何を決めたかが残ります。" }));
+        "決済済みの分だけを日ごとに集計したものです。資金の列は元手からの推移です。" }));
       const tw = el("div", { class: "tw" });
       const t = el("table");
       t.innerHTML = "<thead><tr><th>日付</th><th>点数</th><th>的中</th><th>投入</th><th>損益</th><th>回収率</th>" +
@@ -1460,6 +1407,24 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         cmp.appendChild(el("div", { class: "v", text: f(SW.holdout || {}) }));
       });
       c5.appendChild(cmp);
+      const SB = SW.selection_bias || {};
+      if (SB.inflation != null) {
+        const adj = (SW.search || {}).roi_recovery_rate - SB.inflation;
+        const sb = el("div", { class: "cmp", style: "margin-top:14px" });
+        [["", "ヌル世界のグリッド平均", "ヌル世界の最良点"],
+         ["回収率", F.pct(SB.null_mean_recovery), F.pct(SB.null_best_recovery)]].forEach((row, i) => {
+          row.forEach((cell, j) => sb.appendChild(el("div", {
+            class: (i === 0 ? "hd " : "") + (j ? "v" : ""), text: cell })));
+        });
+        c5.appendChild(sb);
+        c5.appendChild(el("div", { class: "verdict", style: "border-left-color:var(--warn)", text:
+          `着順を市場のインプライド確率から引き直した「エッジがゼロの世界」で同じ探索を ${SB.runs} 回まわした結果です。` +
+          "どの買い方をしても期待値は控除率ぶん負けるので両方 100% を下回りますが、" +
+          `最良点とグリッド平均の差 ${(SB.inflation * 100).toFixed(1)} ポイントは、探索が ${(D.sweep.grid || []).length} 点から` +
+          "最良を選ぶこと自体が生む上振れです。" +
+          `探索期間の ${F.pct((SW.search || {}).roi_recovery_rate)} からこれを引いた ${F.pct(adj)} が、` +
+          `ホールドアウトの ${F.pct((SW.holdout || {}).roi_recovery_rate)} と比べるべき値になります。` }));
+      }
       const delta = (SW.holdout || {}).roi_recovery_rate - (SW.search || {}).roi_recovery_rate;
       c5.appendChild(el("div", { class: "verdict", text:
         `ホールドアウトでの回収率は探索期間より ${(delta * 100).toFixed(1)} ポイント下振れしました。` +
@@ -1507,7 +1472,11 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       const c7 = el("div", { class: "card" });
       c7.appendChild(el("h2", { text: "月次の収支" }));
       c7.appendChild(el("div", { class: "desc", text:
-        "投入額に対する月ごとの損益率です。複利で賭けていると後半ほど金額が大きくなり、円で見ると初期の月が潰れてしまうため、率で揃えています。負ける月がどの深さでどれだけ続くかが、必要な資金量を決めます。" }));
+        "投入額に対する月ごとの損益率です。" +
+        (D.compound === false
+          ? "賭け金は定額ですが、月ごとの投入額は買い目の数で変わるため、円ではなく率で揃えています。"
+          : "複利で賭けていると後半ほど金額が大きくなり、円で見ると初期の月が潰れてしまうため、率で揃えています。") +
+        "負ける月がどの深さでどれだけ続くかが、必要な資金量を決めます。" }));
       c7.appendChild(el("div", { class: "legend", html:
         `<span><i class="sq" style="background:${css("--s1")}"></i>勝ち越した月</span><span><i class="sq" style="background:${css("--critical")}"></i>負け越した月</span>` }));
       const h7 = el("div", { class: "chart" }); c7.appendChild(h7);
@@ -1711,7 +1680,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
   const ICONS = {
     forecast: 'M3 5h14M3 10h14M3 15h9M15.5 13.2l1.8 1.8-3.3 3.3-2.3-.5.5-2.3z',
     overview: 'M3 12h4l3 7 4-16 3 9h4',
-    today: 'M4 5h12v12H4zM4 9h12M8 3v3M12 3v3',
+    today: 'M3 10h14M3 6.5h14v9H3zM6.5 13h2',
     performance: 'M4 16V9M9 16V4M14 16v-5M3.5 18h13',
     model: 'M10 3v4M10 13v4M3 10h4M13 10h4M10 10m-3 0a3 3 0 106 0 3 3 0 10-6 0',
     roadmap: 'M4 5h9M4 10h12M4 15h6M16.5 13.5l1.5 1.5-3 3-2-.5.5-2z',
@@ -1727,8 +1696,8 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         lead: "開催日を選ぶとレース一覧が出ます。レースを選ぶと出走表と買い目、行を押すとその馬の評価の根拠が出ます。" },
       { id: "overview", label: "概要", title: "概要",
         lead: "直近のバックテストの結果と、そこから読み取れることの要約です。" },
-      { id: "today", label: "本日の予想", title: "本日の予想",
-        lead: "当日の出走表に対するモデルの確率と、期待値が閾値を超えた馬への推奨購入額です。ローカル API から取得します。" },
+      { id: "today", label: "収支", title: "ペーパー口座の収支",
+        lead: "台帳に記録された買い目の結果です。買い目そのものと、なぜそう賭けたのかは「予想」ページにあります。" },
       { id: "performance", label: "成績の内訳", title: "成績の内訳",
         lead: "賭け方のパラメータ感度、期間別・オッズ帯別の成績、探索期間とホールドアウトの差です。" },
       { id: "model", label: "モデルの中身", title: "モデルの中身",

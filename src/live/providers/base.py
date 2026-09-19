@@ -27,6 +27,10 @@ CARD_ENTRY_COLUMNS = ["race_id", "entrant_id", "post_position", "draw", "jockey_
                       "weight_carried", "body_weight", "body_weight_diff"]
 CARD_RACE_COLUMNS = ["race_id", "race_date", "venue", "race_no", "distance_m", "surface", "going", "race_class",
                      "n_runners"]
+#: carried through when the source has them. ``organizer`` is a trained feature
+#: once the data spans more than one organization, so dropping it here would
+#: make today's card disagree with the model.
+OPTIONAL_CARD_RACE_COLUMNS = ["organizer"]
 
 
 class ProviderError(RuntimeError):

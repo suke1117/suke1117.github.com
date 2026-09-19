@@ -37,7 +37,13 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import yaml
 
-from src.live.providers.base import CARD_ENTRY_COLUMNS, CARD_RACE_COLUMNS, LiveProvider, ProviderError
+from src.live.providers.base import (
+    CARD_ENTRY_COLUMNS,
+    CARD_RACE_COLUMNS,
+    OPTIONAL_CARD_RACE_COLUMNS,
+    LiveProvider,
+    ProviderError,
+)
 
 _ENV = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
@@ -99,7 +105,8 @@ class HttpJsonProvider(LiveProvider):
         spec = self.cfg["card"]
         need = [c for c in CARD_RACE_COLUMNS + CARD_ENTRY_COLUMNS if c != "n_runners"]
         df = self._frame(self._get("card", date), spec.get("fields", {}), need)
-        races = df[[c for c in CARD_RACE_COLUMNS if c in df.columns]].drop_duplicates("race_id").reset_index(drop=True)
+        races = df[[c for c in CARD_RACE_COLUMNS + OPTIONAL_CARD_RACE_COLUMNS
+                if c in df.columns]].drop_duplicates("race_id").reset_index(drop=True)
         if "n_runners" not in races.columns:
             races = races.merge(df.groupby("race_id").size().rename("n_runners").reset_index(), on="race_id")
         return self.validate_card(races, df[CARD_ENTRY_COLUMNS].reset_index(drop=True))

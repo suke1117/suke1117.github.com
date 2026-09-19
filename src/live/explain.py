@@ -246,6 +246,22 @@ def explain_race(race: pd.DataFrame, predictor: Predictor, policy: BetPolicy, ba
             "bets": bet_rows, "runners": runners}
 
 
+def write_day(payload: Dict, output_dir: str = ARCHIVE_DIR) -> Path:
+    """Save one explained day and fold it into the index, newest first."""
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"{payload['date']}.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    index_path = out / "index.json"
+    rows = (json.loads(index_path.read_text(encoding="utf-8")) or {}).get("days", []) if index_path.exists() else []
+    rows = [r for r in rows if r["date"] != payload["date"]]
+    rows.append({k: payload[k] for k in ("date", "n_races", "n_races_bet", "n_bets", "total_stake",
+                                         "settled", "profit", "recovery")})
+    rows.sort(key=lambda r: r["date"], reverse=True)
+    index_path.write_text(json.dumps({"days": rows}, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
 def explain_day(day: pd.DataFrame, predictor: Predictor, policy: BetPolicy, bankroll: float,
                 with_result: bool = True, max_explained: int = 6) -> Dict:
     races = [explain_race(g, predictor, policy, bankroll, with_result, max_explained)
@@ -339,14 +355,12 @@ def archive(data_path, model_dir, start, end, days, alpha, ev_threshold, max_bet
     for day, g in table.groupby("race_date", sort=True):
         priced = predictor.predict(g)
         payload = explain_day(priced, predictor, policy, bankroll, with_result=True, max_explained=max_explained)
-        (out / f"{payload['date']}.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        write_day(payload, str(out))
         index.append({k: payload[k] for k in ("date", "n_races", "n_races_bet", "n_bets", "total_stake",
                                               "settled", "profit", "recovery")})
         click.echo(f"{payload['date']}  {payload['n_races']:3d} レース  購入 {payload['n_bets']:3d} 点  "
                    f"{payload['total_stake']:>9,.0f}円  "
                    + (f"回収率 {payload['recovery'] * 100:.1f}%" if payload["recovery"] else "未確定"))
-    index.sort(key=lambda r: r["date"], reverse=True)
-    (out / "index.json").write_text(json.dumps({"days": index}, ensure_ascii=False, indent=2), encoding="utf-8")
     click.echo(f"wrote {len(index)} days -> {out}/")
 
 

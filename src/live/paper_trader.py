@@ -38,10 +38,11 @@ from src.common.config import (  # noqa: E402
 )
 from src.common.logging_utils import get_logger  # noqa: E402
 from src.data.features import build_features  # noqa: E402
-from src.data.schema import RESULT_COLUMNS  # noqa: E402
+from src.data.schema import DEFAULT_ORGANIZER, RESULT_COLUMNS  # noqa: E402
+from src.live.explain import explain_day, write_day  # noqa: E402
 from src.live.ledger import Ledger, PaperBet  # noqa: E402
 from src.live.providers import ProviderError, get_provider  # noqa: E402
-from src.live.providers.base import CARD_RACE_COLUMNS  # noqa: E402
+from src.live.providers.base import CARD_RACE_COLUMNS, OPTIONAL_CARD_RACE_COLUMNS  # noqa: E402
 from src.models.predict import Predictor  # noqa: E402
 
 log = get_logger("paper")
@@ -110,7 +111,14 @@ def build_today(history: Tuple[pd.DataFrame, pd.DataFrame], races_today: pd.Data
             today[col] = np.nan
     today["race_date"] = date
 
-    races = pd.concat([hist_races[CARD_RACE_COLUMNS], races_today[CARD_RACE_COLUMNS]], ignore_index=True)
+    # Optional race columns become trained features once the data has them, so
+    # a card that drops one silently disagrees with the model.
+    extra = [c for c in OPTIONAL_CARD_RACE_COLUMNS if c in hist_races.columns]
+    for c in extra:
+        if c not in races_today.columns:
+            races_today = races_today.assign(**{c: DEFAULT_ORGANIZER if c == "organizer" else None})
+    cols_r = CARD_RACE_COLUMNS + extra
+    races = pd.concat([hist_races[cols_r], races_today[cols_r]], ignore_index=True)
     cols = [c for c in hist_entries.columns if c in today.columns or c in RESULT_COLUMNS]
     entries = pd.concat([hist_entries[cols], today.reindex(columns=cols)], ignore_index=True)
 
@@ -285,6 +293,14 @@ def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, 
     slip_path = Path(SLIP_DIR) / f"{date:%Y-%m-%d}.json"
     slip_path.parent.mkdir(parents=True, exist_ok=True)
     slip_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Today's card goes into the same archive the 予想 page reads, so there is
+    # one screen for "what to bet and why" rather than one for today and
+    # another for every other day.
+    from src.models.predict import Predictor as _P
+
+    explained = explain_day(priced, _P.load(Path(model_dir)), policy, bank, with_result=False)
+    explained_path = write_day(explained)
     if not dry_run:
         led.place(bets)
 
@@ -310,6 +326,7 @@ def bet(date, provider_name, model_dir, alpha, ev_threshold, max_bets_per_race, 
         if skipped:
             click.echo(f"{skipped} further bets were dropped at the daily exposure cap.")
     click.echo(f"slip -> {slip_path}")
+    click.echo(f"予想 -> {explained_path}")
 
 
 @cli.command()

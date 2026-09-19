@@ -18,7 +18,13 @@ from typing import Optional, Tuple
 
 import pandas as pd
 
-from src.live.providers.base import CARD_ENTRY_COLUMNS, CARD_RACE_COLUMNS, LiveProvider, ProviderError
+from src.live.providers.base import (
+    CARD_ENTRY_COLUMNS,
+    CARD_RACE_COLUMNS,
+    OPTIONAL_CARD_RACE_COLUMNS,
+    LiveProvider,
+    ProviderError,
+)
 
 
 def _read(path: Path) -> pd.DataFrame:
@@ -50,7 +56,8 @@ class CsvCardProvider(LiveProvider):
         missing = [c for c in CARD_RACE_COLUMNS + CARD_ENTRY_COLUMNS if c not in df.columns and c != "n_runners"]
         if missing:
             raise ProviderError(f"{path} is missing columns: {missing}")
-        races = df[[c for c in CARD_RACE_COLUMNS if c in df.columns]].drop_duplicates("race_id").reset_index(drop=True)
+        races = df[[c for c in CARD_RACE_COLUMNS + OPTIONAL_CARD_RACE_COLUMNS
+                if c in df.columns]].drop_duplicates("race_id").reset_index(drop=True)
         if "n_runners" not in races.columns:
             races = races.merge(df.groupby("race_id").size().rename("n_runners").reset_index(), on="race_id")
         entries = df[CARD_ENTRY_COLUMNS].reset_index(drop=True)

@@ -107,3 +107,54 @@ def test_simulate_is_deterministic_and_bankroll_independent_of_history(sim_and_p
     pd.testing.assert_frame_equal(a, b)
     if len(a):
         assert (a["stake"] > 0).all() and (a["bankroll_after"] > 0).all()
+
+
+# --------------------------------------------------------------------------
+# V3: how much of a search result is just the search
+# --------------------------------------------------------------------------
+def test_the_null_world_follows_the_market_not_a_coin_flip():
+    """Shuffling finishers would hand long shots a huge fake edge; this must not."""
+    from src.backtest.sweep import null_outcomes
+
+    odds = np.array([1.5, 4.0, 8.0, 20.0, 40.0, 60.0])
+    df = pd.DataFrame({"race_id": ["A"] * 6, "win_odds": odds})
+    wins = np.zeros(6)
+    for seed in range(1500):
+        out = null_outcomes(df, seed)
+        wins[int(np.flatnonzero(out["finish_position"].to_numpy() == 1)[0])] += 1
+    implied = (1 / odds) / (1 / odds).sum()
+    assert np.abs(wins / 1500 - implied).max() < 0.03
+    # every race still gets a complete, valid finishing order
+    out = null_outcomes(pd.DataFrame({"race_id": ["A", "A", "B", "B", "B"],
+                                      "win_odds": [2.0, 3.0, 2.0, 5.0, 9.0]}), 1)
+    for _, g in out.groupby("race_id"):
+        assert sorted(g["finish_position"]) == list(range(1, len(g) + 1))
+
+
+def test_the_null_leaves_no_edge_for_any_strategy():
+    """Expected value under the null is 1 - takeout for every runner."""
+    from src.backtest.sweep import null_outcomes
+
+    rng = np.random.default_rng(2)
+    n_races, n = 3000, 8
+    odds = np.round(np.clip(rng.lognormal(1.6, 0.7, n_races * n), 1.2, 200.0), 1)
+    df = pd.DataFrame({"race_id": np.repeat(np.arange(n_races), n), "win_odds": odds})
+    out = null_outcomes(df, 11)
+    won = (out["finish_position"] == 1).to_numpy()
+    ret = np.where(won, out["win_odds"].to_numpy(), 0.0)
+    # Each runner's expected return is 1 / its own race's overround. Averaging
+    # the overrounds first and inverting is a different number (Jensen), so the
+    # expectation has to be built per race.
+    per_race = df.groupby("race_id")["win_odds"].transform(lambda o: 1.0 / (1 / o).sum())
+    assert ret.mean() == pytest.approx(per_race.mean(), rel=0.05)
+    assert ret.mean() < 1.0, "the null must leave no strategy above break-even"
+
+
+def test_null_outcomes_do_not_touch_the_original_frame():
+    from src.backtest.sweep import null_outcomes
+
+    df = pd.DataFrame({"race_id": ["A"] * 4, "win_odds": [2.0, 4.0, 6.0, 8.0],
+                       "finish_position": [1, 2, 3, 4]})
+    before = df["finish_position"].tolist()
+    null_outcomes(df, 5)
+    assert df["finish_position"].tolist() == before
