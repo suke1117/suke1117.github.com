@@ -55,9 +55,10 @@ def main(input_dir: str, output_dir: str, synthetic: bool, start: str, end: str,
     log.info("loaded %d races / %d entries (%s .. %s)", len(races), len(entries),
              races["race_date"].min().date(), races["race_date"].max().date())
 
-    table, feature_cols = build_features(races, entries)
+    table, feature_cols, feature_groups = build_features(races, entries)
     assert_no_forbidden(feature_cols)
-    log.info("built %d features for %d rows", len(feature_cols), len(table))
+    log.info("built %d features for %d rows | groups: %s", len(feature_cols), len(table),
+             ", ".join(f"{g}={len(c)}" for g, c in feature_groups.items()))
 
     table.to_csv(out / "train.csv", index=False)
     meta = {
@@ -68,6 +69,7 @@ def main(input_dir: str, output_dir: str, synthetic: bool, start: str, end: str,
         "date_min": str(table["race_date"].min().date()),
         "date_max": str(table["race_date"].max().date()),
         "source": type(source).__name__,
+        "feature_groups": feature_groups,
     }
     (out / "features.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
     log.info("wrote %s and %s", out / "train.csv", out / "features.json")

@@ -112,7 +112,7 @@ def sweep_rows(grid: pd.DataFrame) -> List[Dict]:
 #: YAML folded scalars join wrapped lines with a space, which shows up as a gap
 #: mid-sentence in Japanese. Drop a space only when both neighbours are non-ASCII.
 _CJK_GAP = re.compile(r"(?<=[^\x00-\x7F])[ \t]+(?=[^\x00-\x7F])")
-TEXT_FIELDS = ("title", "why", "done", "impact", "blocked_by")
+TEXT_FIELDS = ("title", "why", "done", "impact", "blocked_by", "result")
 
 
 def normalize_text(value):
@@ -160,6 +160,21 @@ def load_roadmap(path: Path) -> Dict:
             "categories": sorted({t["category"] for t in tasks})}
 
 
+def ablation_rows(df: pd.DataFrame) -> List[Dict]:
+    """What each feature family is worth, from src/models/ablation.py --each."""
+    if df.empty:
+        return []
+    rows = []
+    for r in df.itertuples():
+        name = str(r.variant)
+        rows.append({"family": name[2:] if name.startswith("- ") else name,
+                     "is_baseline": not name.startswith("- "),
+                     "n_features": int(r.n_features), "logloss": _num(r.winner_logloss_p_win_model),
+                     "sd": _num(r.logloss_sd), "delta": _num(r.delta_logloss),
+                     "top1": _num(r.top1_hit_rate), "ece": _num(r.ece_p_win_model)})
+    return sorted(rows, key=lambda x: -(x["delta"] or 0))
+
+
 def model_block(metrics: Dict) -> Dict:
     test = metrics.get("test", {})
     return {
@@ -195,6 +210,7 @@ def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, o
     daily = _read_csv(bt / "equity_curve.csv")
     periods = _read_csv(bt / "periods.csv")
     grid = _read_csv(sw / "sweep_grid.csv")
+    ablation = _read_csv(bt / "ablation.csv")
     features = _read_csv(md / "feature_importance.csv", index_col=0)
     processed_meta = {}
     pm = Path("processed/features.json")
@@ -229,6 +245,7 @@ def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, o
         "features": [{"name": str(i), "gain": _num(g)} for i, g in features["gain"].head(15).items()]
         if not features.empty else [],
         "sweep": {"grid": sweep_rows(grid), "summary": sweep_summary},
+        "ablation": ablation_rows(ablation),
         "roadmap": load_roadmap(Path(roadmap_path)),
     }
 

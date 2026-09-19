@@ -37,6 +37,7 @@ pip install -r requirements.txt
 | 4 バックテスト | `python src/backtest/simulator.py --start_date 2022-01-01 --end_date 2023-12-31` |
 | 4b パラメータ探索 | `python src/backtest/sweep.py --start_date 2021-01-01 --end_date 2023-12-31 --holdout_start 2023-04-01` |
 | 推論 | `python src/models/predict.py --data processed/train.csv --model_dir artifacts/` |
+| 特徴量の寄与測定 | `python src/models/ablation.py --each --seeds 3` |
 | ダッシュボード | `python src/web/export_dashboard.py --output web/data.json` |
 | テスト | `python -m pytest tests/ -q` |
 | 全部 | `make all` |
@@ -56,6 +57,45 @@ pip install -r requirements.txt
 | `--no_compound` | – | 初期資金ベースの定額 Kelly (結果の解釈が容易) |
 | `--no_market_blend` | – | Benter 型の市場ブレンドを無効化 (純粋モデル確率で賭ける) |
 | `--max_stake_yen` | 1,000,000 | 流動性キャップ (1 点あたり上限) |
+
+## 特徴量
+
+as-of 集計 80 本を 10 の family に分けています。すべて当該レース開催日より前の情報だけから作ります。
+
+| family | 内容 |
+|---|---|
+| entrant | 馬の通算・直近成績、スピード指数、間隔 |
+| entrant_cond | 馬 × 芝ダート・距離帯・競馬場・馬場状態・クラス |
+| jockey | 騎手の通算・直近90日成績、馬の実力からの残差 |
+| jockey_cond | 騎手 × 競馬場・芝ダート・距離帯・馬場状態 |
+| pair | 馬 × 騎手の相性 |
+| switch | 乗り替わりか継続騎乗か、騎手の格の上下 |
+| trainer / trainer_jockey | 厩舎の成績、厩舎 × 騎手 |
+| static / relative | レース条件、出走馬の中での相対順位 |
+
+### 条件別集計は縮小推定を通す
+
+条件を細かく割るとセルあたりの標本が足りなくなります。実 JRA 規模でも騎手 × 競馬場 × 芝ダ × 距離帯は
+5 年で 1 セル 16 騎乗程度、馬 × 騎手に至っては中央値 1 騎乗です。そのままの勝率はノイズなので、
+条件別の値はすべて経験ベイズ縮小 (`SHRINK_K`) で親の値に寄せています。標本が少ないセルほど親に近づきます。
+
+### 騎手の勝率は交絡している
+
+騎手の勝率は「騎乗が上手い」と「良い馬に乗せてもらえる」が混ざった数字です。
+そのため、馬自身の通算成績から期待される着順に対する残差 (`jky_resid`) を別に持たせています。
+
+### 寄与は測ってから採用する
+
+`src/models/ablation.py` が family を 1 つずつ外して再学習し、ホールドアウトの対数損失の差を出します。
+シードを変えた複数回の平均で、ばらつきより小さい差は判定不能として扱います。
+
+```bash
+make ablation
+```
+
+合成データでの測定では entrant_cond が +0.067、jockey_cond が +0.019 で、この 2 つが寄与しています。
+一方 pair (+0.001) と switch (-0.004) は効果が測れませんでした。合成データ側に相性の構造は入れてあるので、
+これは「相性が存在しない」ではなく「ペアあたり中央値 1 騎乗では推定できない」という結論です。
 
 ## パラメータ探索 (Phase 4b)
 

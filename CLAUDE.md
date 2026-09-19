@@ -19,7 +19,7 @@
 src/
   common/      定数・設定・ロギング・競技スペック (SportSpec)
   data/        データ取得層 (sources/) と特徴量エンジニアリング (features.py), preprocess.py CLI
-  models/      LightGBM ランカー, Plackett-Luce, Isotonic 較正, train_lgbm.py CLI, predict.py
+  models/      LightGBM ランカー, Plackett-Luce, Isotonic 較正, train_lgbm.py CLI, predict.py, 寄与測定 ablation.py CLI
   betting/     Kelly 計算 (kelly_calculator.py CLI), ベット選択戦略 (strategy.py)
   backtest/    ウォークフォワード・ペーパーベッティング simulator.py CLI, パラメータ探索 sweep.py CLI, metrics.py
   web/         ダッシュボード用データ書き出し export_dashboard.py, 単体HTMLビルド build_static.py
@@ -37,6 +37,10 @@ artifacts/     学習済みモデル・較正器 (git 管理外)
    - 交差検証において `KFold` や `train_test_split` (shuffle=True) を絶対に使用してはならない。
    - モデルの評価およびペーパー賭けには、常に時間軸を順方向にのみ進める `TimeSeriesSplit` または独自の日付ベースのウォークフォワード検証のみを使用すること。
    - 特徴量は必ず「当該レース開催日より前」の情報のみから計算する（`shift(1)` / as-of 結合）。当該レースの着順・タイム・確定オッズ由来の値を特徴量に混入させてはならない。
+   - 1 日に複数回登場する主体 (騎手・厩舎) の集計は `_asof_cum` を使い、**日単位の境界**で切ること。
+     騎乗単位の `shift(1)` は同一開催日の後のレースが前のレースに混入する。
+   - データセット全体の統計量 (全レースの平均頭数など) を事前分布や欠損補完に使ってはならない。
+     未来のレースが含まれるため。当該レース時点で既知の値を使うこと。
 2. **ターゲット変数の制約**:
    - 走破タイムの予測（回帰問題）は実装しない。ペース依存のノイズを排除するため、必ず「着順（相対順位）」をターゲットとし、ペアワイズ学習を適用すること。
 3. **確率の明示的変換と較正**:
@@ -44,7 +48,14 @@ artifacts/     学習済みモデル・較正器 (git 管理外)
 4. **保守的な資金管理（負けないロジック）**:
    - ベッティングモジュールでは、フル・ケリーを絶対に使用しない。期待値 (EV) がユーザー定義の閾値（例: 1.05）を超える場合のみ発火し、賭け金は Fractional Kelly (デフォルトα=0.1) を上限とする制約をハードコードすること。
    - `src/common/config.py` の `MAX_KELLY_ALPHA` (=0.25) を超える α は例外として拒否する。1レースあたりの投入額は `MAX_RACE_EXPOSURE` (資金の 5%) を超えない。
-5. **コマンド駆動モジュール設計**:
+5. **条件別集計は縮小推定を通す**:
+   - 条件別 (騎手 × 競馬場、馬 × 馬場状態、馬 × 騎手 など) の勝率・着順は、セルあたりの標本が
+     すぐ枯渇する。生の集計値を特徴量にしてはならない。`_shrunk_rate` で親の値へ縮小すること。
+   - 擬似カウントは `SHRINK_K` に集約する。新しい条件を足すときはセルあたりの標本数を確認してから決める。
+6. **特徴量は寄与を測ってから採用する**:
+   - 新しい特徴量 family を足したら `src/models/ablation.py` で寄与を測り、シード分散より大きいことを確認する。
+   - 寄与が測れなかった family は、削除するにしても残すにしても、判断を `docs/roadmap.yml` に記録する。
+7. **コマンド駆動モジュール設計**:
    - 各モジュール（前処理、学習、推論、バックテスト）は、独立したPythonスクリプトとしてCLIから実行できるように `argparse` または `click` で構築すること。
 
 ## 4. Development Phases & Test Commands

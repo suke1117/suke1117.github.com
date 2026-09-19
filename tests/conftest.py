@@ -20,5 +20,11 @@ def small_raw():
 @pytest.fixture(scope="session")
 def small_table(small_raw):
     races, entries = small_raw
-    table, feature_cols = build_features(races, entries)
+    table, feature_cols, groups = build_features(races, entries)
     return table, feature_cols
+
+
+@pytest.fixture(scope="session")
+def small_groups(small_raw):
+    races, entries = small_raw
+    return build_features(races, entries)[2]

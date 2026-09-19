@@ -171,9 +171,21 @@ caption{caption-side:bottom; text-align:left; font-size:11.5px; color:var(--mute
 .tag.blocked{border-color:var(--critical); color:var(--critical-ink)}
 .task p{margin:0; font-size:12px; color:var(--ink-2); line-height:1.7}
 .task .dod{margin-top:auto; padding-top:9px; font-size:11.5px; color:var(--ink-2)}
+.task.is-done{background:var(--surface); border-left-color:var(--good)}
+.task.is-done h4{color:var(--ink-2)}
+.task .res{margin-top:9px; padding-top:9px; border-top:1px solid var(--grid); font-size:11.5px; color:var(--ink-2)}
+.task .res .h{display:block; font-size:10.5px; font-weight:600; color:var(--good-ink); letter-spacing:.03em;
+  margin-bottom:2px}
 .task .dod .h{display:block; font-size:10.5px; font-weight:600; color:var(--muted); letter-spacing:.03em; margin-top:9px;
   padding-top:9px; border-top:1px solid var(--grid)}
 .rm-empty{padding:26px 0; text-align:center; color:var(--muted); font-size:12.5px}
+
+/* diverging bar inside a table cell */
+.dv{display:inline-block; position:relative; width:170px; height:18px; vertical-align:middle}
+.dv .mid{position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--axis)}
+.dv .b{position:absolute; top:3px; height:12px; border-radius:3px}
+.dv .t{position:absolute; top:0; font-size:11px; line-height:18px; font-family:"IBM Plex Mono",monospace;
+  color:var(--ink-2); font-variant-numeric:tabular-nums; white-space:nowrap}
 
 /* rules / footer */
 .rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px}
@@ -460,6 +472,9 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     const card = el("div", { class: "card" });
     card.appendChild(el("h2", { text: "改善ロードマップ" }));
     if (R.meta && R.meta.intro) card.appendChild(el("div", { class: "rm-intro", text: R.meta.intro }));
+    if (R.meta && R.meta.updated_note) {
+      card.appendChild(el("div", { class: "verdict", style: "margin:0 0 14px", text: R.meta.updated_note }));
+    }
 
     if ((R.evidence || []).length) {
       const ev = el("div", { class: "ev" });
@@ -515,12 +530,14 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
         const hd = el("div", { class: "pghead" });
         hd.appendChild(el("span", { class: "tag-p", text: pk }));
         hd.appendChild(el("h3", { text: PRIO[pk].t }));
-        hd.appendChild(el("span", { class: "n", text: `${list.length} 件` }));
+        const open = list.filter(x => x.status !== "done").length;
+        hd.appendChild(el("span", { class: "n",
+          text: open === list.length ? `${list.length} 件` : `${open} 件 / 完了 ${list.length - open}` }));
         g.appendChild(hd);
         g.appendChild(el("div", { class: "rm-intro", text: PRIO[pk].d }));
         const grid = el("div", { class: "tasks" });
         list.forEach(t => {
-          const c = el("div", { class: "task" });
+          const c = el("div", { class: "task" + (t.status === "done" ? " is-done" : "") });
           const top = el("div", { class: "top" });
           top.appendChild(el("span", { class: "tid", text: t.id }));
           top.appendChild(el("h4", { text: t.title }));
@@ -533,6 +550,12 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
             text: STATUS[t.status] || t.status }));
           c.appendChild(tags);
           c.appendChild(el("p", { text: t.why }));
+          if (t.result) {
+            const res = el("div", { class: "res" });
+            res.appendChild(el("span", { class: "h", text: "実装済み・測定結果" }));
+            res.appendChild(el("span", { text: t.result }));
+            c.appendChild(res);
+          }
           const dod = el("div", { class: "dod" });
           dod.appendChild(el("span", { class: "h", text: "完了条件" }));
           dod.appendChild(el("span", { text: t.done }));
@@ -878,6 +901,46 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       fmtY: v => v.toFixed(2), fmtLabel: v => v.toFixed(3),
       tip: d => `<b>${d.k}</b><br>${d.c}<br><span class="k">対数損失</span>${F.fx(d.v, 4)}`,
     });
+
+    /* what each feature family is worth */
+    if ((D.ablation || []).length) {
+      const cAb = el("div", { class: "card" });
+      cAb.appendChild(el("h2", { text: "特徴量 family ごとの寄与" }));
+      cAb.appendChild(el("div", { class: "desc", text:
+        "その family だけを外して学習し直したときに、ホールドアウトの対数損失がどれだけ悪化するかです。" +
+        "正の値はその family が無いとモデルが悪くなること、負の値は外したほうが良いことを意味します。" +
+        "シードを変えた複数回の平均で、ばらつきより小さい差は判定できません。" }));
+      cAb.appendChild(el("div", { class: "legend", html:
+        `<span><i class="sq" style="background:${css("--s1")}"></i>あると良くなる</span>` +
+        `<span><i class="sq" style="background:${css("--critical")}"></i>外したほうが良い</span>` }));
+      const rowsA = D.ablation.filter(r => !r.is_baseline);
+      const baseA = D.ablation.find(r => r.is_baseline);
+      const maxAbs = Math.max(...rowsA.map(r => Math.abs(r.delta || 0)), 1e-9);
+      const tw = el("div", { class: "tw" });
+      const tA = el("table");
+      const body = rowsA.map(r => {
+        const d = r.delta || 0;
+        const w = (Math.abs(d) / maxAbs) * 48;              // half-width bar, centred
+        const pos = d >= 0;
+        const col = pos ? css("--s1") : css("--critical");
+        const decisive = Math.abs(d) > (r.sd || 0) * 2;
+        const bar = `<span class="dv"><span class="mid"></span>` +
+          `<span class="b" style="${pos ? "left:50%" : "right:50%"};width:${w}%;background:${col};` +
+          `opacity:${decisive ? 1 : 0.45}"></span>` +
+          `<span class="t" style="${pos ? "right:0" : "left:0"}">${d >= 0 ? "+" : ""}${d.toFixed(4)}</span></span>`;
+        return `<tr><td>${r.family}</td><td class="num">${r.n_features}</td><td class="num">${(r.logloss || 0).toFixed(4)}</td>` +
+          `<td class="num">±${(r.sd || 0).toFixed(4)}</td><td style="text-align:center">${bar}</td>` +
+          `<td class="num">${decisive ? "有意" : "判定不能"}</td></tr>`;
+      }).join("");
+      tA.innerHTML = "<thead><tr><th>外した family</th><th>残り特徴量</th><th>対数損失</th><th>シード分散</th>" +
+        "<th>基準との差</th><th>判定</th></tr></thead><tbody>" + body + "</tbody>";
+      tA.appendChild(el("caption", { text:
+        `基準は全 ${baseA ? baseA.n_features : "?"} 特徴量で対数損失 ${baseA ? baseA.logloss.toFixed(4) : "?"}。` +
+        "判定は差がシード分散の 2 倍を超えるかどうか。1 つのホールドアウト期間での測定なので、" +
+        "family の削除を決める前に複数ウィンドウでの再測定が要る (ロードマップ V4)。" }));
+      tw.appendChild(tA); cAb.appendChild(tw);
+      add(cAb);
+    }
 
     /* guard rails */
     const cB = el("div", { class: "card" });

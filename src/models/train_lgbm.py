@@ -24,6 +24,7 @@ import click  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from src.common.config import LGBM_DEFAULT_PARAMS  # noqa: E402
 from src.common.logging_utils import get_logger  # noqa: E402
 from src.models.calibration import WinProbCalibrator, expected_calibration_error, reliability_table  # noqa: E402
 from src.models.market_blend import MarketBlend  # noqa: E402
@@ -63,7 +64,9 @@ def fit_pipeline(train: pd.DataFrame, calib: pd.DataFrame, feature_cols, categor
                  market_blend: bool = True) -> Predictor:
     """Train ranker on ``train``; fit PL temperature, isotonic map and (optionally) the
     Benter market blend on ``calib`` (strictly later in time than ``train``)."""
-    ranker = RankerModel(feature_cols, categorical_cols, params or {}) if params else RankerModel(feature_cols, categorical_cols)
+    merged = dict(LGBM_DEFAULT_PARAMS)
+    merged.update(params or {})
+    ranker = RankerModel(feature_cols, categorical_cols, merged)
     ranker.fit(train, calib)
     calib = calib.copy()
     calib["score"] = ranker.predict(calib)

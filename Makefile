@@ -28,3 +28,6 @@ sweep:
 dashboard:
 	$(PY) src/web/export_dashboard.py --output web/data.json
 	$(PY) src/web/build_static.py --output web/dist/index.html
+
+ablation:
+	$(PY) src/models/ablation.py --each --seeds 3 --output backtest_results/ablation.csv
