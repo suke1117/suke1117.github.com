@@ -935,6 +935,54 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     });
 
     page("performance");
+    /* what a return target costs */
+    if (D.target_plan && (D.target_plan.rows || []).length) {
+      const T = D.target_plan;
+      const ct = el("div", { class: "card" });
+      ct.appendChild(el("h2", { text: "目標と到達確率" }));
+      ct.appendChild(el("div", { class: "desc", text:
+        `実測 ${F.num(T.n_source_bets)} 点を再標本化して、${T.days} 開催日 × ${T.bets_per_day} 点 = ${T.n_bets} 点を` +
+        `${F.num(T.rows.length ? 120000 : 0)} 回シミュレーションした結果です。` +
+        "ケリー倍率を上げると平均は伸び続けますが、中央値は途中から下がります。" +
+        "利益が細い確率の側に移っているからで、その差がこの表の要点です。読むべきは平均ではなく中央値と損失側です。" }));
+      const facts = el("div", { class: "rules" });
+      const rule2 = (k, v, d) => {
+        const n = el("div", { class: "rule" });
+        n.appendChild(el("div", { class: "k", text: k }));
+        n.appendChild(el("div", { class: "v", text: v }));
+        if (d) n.appendChild(el("div", { class: "d", text: d }));
+        return n;
+      };
+      facts.appendChild(rule2("1点あたり期待対数成長", F.fx(T.growth_per_bet_full_kelly, 5), "フルケリーでの値"));
+      facts.appendChild(rule2("フルケリーの理論上の到達点", F.fx(T.ceiling_full_kelly) + "倍",
+        `${T.n_bets} 点でこれが上限`));
+      facts.appendChild(rule2(`目標 ${F.fx(T.target, 1)} 倍に必要なエッジ`,
+        F.fx(T.required_growth_per_bet / T.growth_per_bet_full_kelly, 1) + "倍", "現在との比"));
+      facts.appendChild(rule2("現在のエッジで到達する点数", F.num(T.required_bets_at_current_edge),
+        `= ${Math.round(T.required_bets_at_current_edge / T.bets_per_day)} 開催日`));
+      ct.appendChild(facts);
+      const tw = el("div", { class: "tw" });
+      const tt = el("table");
+      tt.innerHTML = "<thead><tr><th>ケリー倍率</th><th>中央値</th><th>平均</th><th>下位10%</th>" +
+        `<th>P(${F.fx(T.target, 1)}倍)</th><th>P(半減)</th><th>P(9割減)</th><th>P(元本割れ)</th></tr></thead><tbody>` +
+        T.rows.map(r => {
+          const over = r.multiple > T.max_kelly_alpha;
+          const bad = r.p_ruin > 0.02;
+          return `<tr${over ? ' style="opacity:.72"' : ""}><td class="num">${F.fx(r.multiple, 2)}` +
+            `${over ? ' <span class="tag blocked">上限超</span>' : ""}</td>` +
+            `<td class="num" style="color:${r.median >= 1 ? "var(--good-ink)" : "var(--critical-ink)"}">${F.fx(r.median)}</td>` +
+            `<td class="num">${F.fx(r.mean)}</td><td class="num">${F.fx(r.p10)}</td>` +
+            `<td class="num">${F.pct(r.p_target, 2)}</td><td class="num">${F.pct(r.p_half, 2)}</td>` +
+            `<td class="num" style="color:${bad ? "var(--critical-ink)" : "var(--ink-2)"}">${F.pct(r.p_ruin, 2)}</td>` +
+            `<td class="num">${F.pct(r.p_down, 1)}</td></tr>`;
+        }).join("") + "</tbody>";
+      tt.appendChild(el("caption", { text:
+        `システムの上限 α=${T.max_kelly_alpha} は 0.25 倍ケリー相当です。それを超える行は実行できません。` +
+        "この表自体も合成データのエッジに基づくため、実データでエッジがゼロなら全行が下振れします。" }));
+      tw.appendChild(tt); ct.appendChild(tw);
+      add(ct);
+    }
+
     /* Kelly curve: small multiples, one scale each */
     const grid = D.sweep.grid || [];
     const sel = SW.selected || {};

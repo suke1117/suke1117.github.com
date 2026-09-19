@@ -211,6 +211,8 @@ def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, o
     periods = _read_csv(bt / "periods.csv")
     grid = _read_csv(sw / "sweep_grid.csv")
     ablation = _read_csv(bt / "ablation.csv")
+    plan_path = bt / "target_plan.json"
+    target_plan = json.loads(plan_path.read_text()) if plan_path.exists() else {}
     features = _read_csv(md / "feature_importance.csv", index_col=0)
     processed_meta = {}
     pm = Path("processed/features.json")
@@ -246,6 +248,7 @@ def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, o
         if not features.empty else [],
         "sweep": {"grid": sweep_rows(grid), "summary": sweep_summary},
         "ablation": ablation_rows(ablation),
+        "target_plan": target_plan,
         "roadmap": load_roadmap(Path(roadmap_path)),
     }
 

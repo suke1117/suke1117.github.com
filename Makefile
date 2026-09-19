@@ -37,3 +37,6 @@ paper:
 
 serve:
 	$(PY) src/live/api.py
+
+plan:
+	$(PY) src/backtest/target_planner.py --target 4.0 --days 2 --output backtest_results/target_plan.json
