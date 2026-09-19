@@ -43,6 +43,67 @@ h1,h2,h3{text-wrap:balance; margin:0}
 .mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
 .tnum{font-variant-numeric:tabular-nums}
 
+/* app bar + drawer */
+.appbar{position:sticky; top:env(safe-area-inset-top,0px); z-index:30; display:flex; align-items:center; gap:12px;
+  background:var(--surface); border-bottom:1px solid var(--border); margin-inline:-16px; padding:10px 16px}
+.appbar .name{font-size:14px; font-weight:600; letter-spacing:.01em; white-space:nowrap}
+.appbar .sep{width:1px; height:16px; background:var(--border)}
+.appbar .page{font-size:13px; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.appbar .spacer{margin-left:auto}
+.iconbtn{display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; flex:none;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:9px; cursor:pointer; padding:0}
+.iconbtn:hover{background:var(--surface-2)}
+.iconbtn:focus-visible{outline:2px solid var(--s1); outline-offset:2px}
+.backdrop{position:fixed; inset:0; background:rgba(8,12,16,.42); z-index:40; opacity:0; pointer-events:none;
+  transition:opacity .16s}
+.backdrop.open{opacity:1; pointer-events:auto}
+.drawer{position:fixed; top:0; bottom:0; left:0; width:272px; max-width:86vw; z-index:41; background:var(--surface);
+  border-right:1px solid var(--border); transform:translateX(-100%); transition:transform .18s ease;
+  display:flex; flex-direction:column; padding-top:env(safe-area-inset-top,0px)}
+.drawer.open{transform:none}
+.drawer .head{padding:16px 18px 12px; border-bottom:1px solid var(--border)}
+.drawer .head .t{font-size:15px; font-weight:600}
+.drawer .head .s{font-size:11.5px; color:var(--muted); margin-top:2px}
+.drawer nav{padding:10px; display:flex; flex-direction:column; gap:2px; overflow-y:auto}
+.navitem{display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:8px; border:none;
+  background:none; color:var(--ink-2); font:inherit; font-size:13.5px; text-align:left; cursor:pointer; width:100%}
+.navitem:hover{background:var(--surface-2)}
+.navitem[aria-current="page"]{background:var(--surface-3); color:var(--ink); font-weight:600}
+.navitem .ic{width:18px; height:18px; flex:none; color:var(--muted)}
+.navitem[aria-current="page"] .ic{color:var(--s1)}
+.navitem .cnt{margin-left:auto; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
+.navitem:focus-visible{outline:2px solid var(--s1); outline-offset:-2px}
+.drawer .foot{margin-top:auto; padding:12px 18px; border-top:1px solid var(--border); font-size:11px; color:var(--muted)}
+.page-body{padding-top:22px}
+.page-body[hidden]{display:none !important}
+.pagehead{margin-bottom:18px}
+.pagehead h1{font-size:22px; font-weight:600; letter-spacing:-.01em}
+.pagehead p{margin:5px 0 0; font-size:13px; color:var(--ink-2); max-width:70ch}
+
+/* live page */
+.live-state{display:flex; gap:12px; align-items:flex-start; border:1px solid var(--border); border-radius:var(--r);
+  background:var(--surface); padding:16px 18px; margin-bottom:18px; border-left:3px solid var(--s1)}
+.live-state.warn{border-left-color:var(--warn)}
+.live-state p{margin:0 0 8px; font-size:13px; color:var(--ink-2)}
+.live-state pre{margin:0; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  padding:10px 12px; overflow-x:auto; font-family:"IBM Plex Mono",monospace; font-size:11.5px; line-height:1.8;
+  color:var(--ink-2)}
+.dot-live{width:8px; height:8px; border-radius:99px; background:var(--good); flex:none; margin-top:6px}
+.dot-live.off{background:var(--muted)}
+.race-card{border:1px solid var(--border); border-radius:8px; margin-bottom:10px; background:var(--surface-2);
+  overflow:hidden}
+.race-card > summary{cursor:pointer; padding:10px 14px; display:flex; gap:10px; align-items:center;
+  font-size:12.5px; list-style:none}
+.race-card > summary::-webkit-details-marker{display:none}
+.race-card > summary:hover{background:var(--surface-3)}
+.race-card .rno{font-family:"IBM Plex Mono",monospace; font-weight:600; color:var(--ink)}
+.race-card .cond{color:var(--muted); font-size:11.5px}
+.race-card .flag{margin-left:auto; font-size:11px; font-weight:600; color:var(--s1)}
+.race-card .flag.none{color:var(--muted); font-weight:400}
+.race-card .inner{padding:0 14px 12px}
+tr.picked td{background:color-mix(in srgb, var(--s1) 9%, transparent)}
+tr.picked td:first-child{font-weight:600}
+
 /* header */
 header{padding-block:28px 18px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; justify-content:space-between}
 header > .brand:last-child{align-items:flex-start; gap:10px}
@@ -204,6 +265,8 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
 <div class="wrap" id="app">
   <div class="loading">読み込み中…</div>
 </div>
+<div class="backdrop" id="backdrop" hidden></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="ページ" hidden></div>
 
 <script>
 (function () {
@@ -274,10 +337,12 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       const svg = draw(w, tip);
       host.insertBefore(svg, tip);
     };
+    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); };
     render();
-    if (window.ResizeObserver) {
-      new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); }).observe(host);
-    }
+    // a chart built inside a hidden page measures zero; both of these catch the
+    // moment it becomes visible
+    if (window.ResizeObserver) new ResizeObserver(schedule).observe(host);
+    window.addEventListener("resize", schedule);
   }
   function showTip(tip, host, x, y, html) {
     tip.innerHTML = html;
@@ -578,12 +643,212 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     return card;
   }
 
+  /* ---------- live paper betting (served by src/live/api.py) ---------- */
+  const LIVE = { root: null, loaded: false, loading: false };
+  const SETUP_STEPS =
+    "python src/data/preprocess.py --input raw_data/ --output processed/\n" +
+    "python src/models/train_lgbm.py --data processed/train.csv --model_dir artifacts/\n" +
+    "python src/live/paper_trader.py bet --provider demo\n" +
+    "python src/live/api.py            # http://127.0.0.1:8787";
+
+  function livePage(D) {
+    const wrap = el("div");
+    LIVE.root = wrap;
+    wrap.appendChild(el("div", { class: "loading", text: "ローカル API に接続しています…" }));
+    return wrap;
+  }
+
+  function liveOffline(reason) {
+    const wrap = LIVE.root;
+    wrap.innerHTML = "";
+    const box = el("div", { class: "live-state warn" });
+    box.appendChild(el("span", { class: "dot-live off" }));
+    const body = el("div");
+    body.appendChild(el("p", { html:
+      "<b>ローカル API に接続していません。</b>このページだけはライブのデータを読みます。" +
+      "公開されているダッシュボードは静的なスナップショットなので、当日の予想はご自身の環境で以下を実行してください。" }));
+    body.appendChild(el("pre", { text: SETUP_STEPS }));
+    body.appendChild(el("p", { style: "margin:8px 0 0", text:
+      "起動後、同じアドレス (既定は http://127.0.0.1:8787) でこのページを開くと、ここに当日の出走表と推奨購入が並びます。" }));
+    if (reason) body.appendChild(el("p", { style: "margin:6px 0 0; font-size:11.5px; color:var(--muted)",
+      text: "接続時のエラー: " + reason }));
+    box.appendChild(body);
+    wrap.appendChild(box);
+
+    const note = el("div", { class: "card" });
+    note.appendChild(el("h2", { text: "データの取り込みについて" }));
+    note.appendChild(el("div", { class: "desc", text:
+      "JRA には公開 API がありません。実際に使える経路は次の 3 つで、どれを選んでもその先の処理は同じです。" }));
+    const rules = el("div", { class: "rules" });
+    [["JRA-VAN Data Lab.", "--provider jravan", "公式の有料購読。JV-Link は Windows の COM のため Windows 必須"],
+     ["自分で用意した CSV", "--provider csv", "live_data/cards と odds に置くだけ。購読が無くても今日から動く"],
+     ["任意の JSON API", "--provider http", "live_data/provider.yml で URL と項目名を対応づける。コード変更不要"]].forEach(([k, v, d]) => {
+      const n = el("div", { class: "rule" });
+      n.appendChild(el("div", { class: "k", text: k }));
+      n.appendChild(el("div", { class: "v", text: v }));
+      n.appendChild(el("div", { class: "d", text: d }));
+      rules.appendChild(n);
+    });
+    note.appendChild(rules);
+    wrap.appendChild(note);
+  }
+
+  function liveRender(slip, summary, dates) {
+    const wrap = LIVE.root;
+    wrap.innerHTML = "";
+    const S = summary && summary.summary ? summary.summary : null;
+
+    const box = el("div", { class: "live-state" });
+    box.appendChild(el("span", { class: "dot-live" }));
+    const meta = el("div");
+    meta.appendChild(el("p", { html: slip
+      ? `<b>${slip.date} の出走表を読み込みました。</b>データ元 <span class="mono">${slip.provider}</span>、` +
+        `作成 ${slip.generated_at}。方針は α=${slip.policy.alpha} / EV≥${slip.policy.ev_threshold} / ` +
+        `1レース${slip.policy.max_bets_per_race}点 (${slip.policy.source === "sweep" ? "探索で選ばれた値" : slip.policy.source})。`
+      : "<b>API には接続できていますが、まだ当日の予想がありません。</b>" }));
+    if (!slip) meta.appendChild(el("pre", { text: "python src/live/paper_trader.py bet --provider demo" }));
+    else if ((dates || []).length > 1) meta.appendChild(el("p", { style: "margin:0; font-size:11.5px; color:var(--muted)",
+      text: `保存されている日: ${dates.slice(-6).join(" / ")}` }));
+    box.appendChild(meta);
+    wrap.appendChild(box);
+
+    if (S && S.n_bets) {
+      const kp = el("div", { class: "kpis" });
+      const tile = (lab, val, note) => {
+        const d = el("div", { class: "kpi" });
+        d.appendChild(el("div", { class: "lab", text: lab }));
+        d.appendChild(el("div", { class: "val", text: val }));
+        if (note) d.appendChild(el("div", { class: "note", text: note }));
+        return d;
+      };
+      const hero = tile("ペーパー資金", F.yen(S.bankroll), `元手 ${F.yen(S.start_bankroll)}`);
+      hero.className = "kpi hero";
+      kp.appendChild(hero);
+      kp.appendChild(tile("回収率", S.recovery_rate == null ? "—" : F.pct(S.recovery_rate),
+        S.n_settled ? `確定 ${F.num(S.n_settled)} 点` : "未確定"));
+      kp.appendChild(tile("的中率", S.hit_rate == null ? "—" : F.pct(S.hit_rate), ""));
+      kp.appendChild(tile("損益", (S.total_profit >= 0 ? "+" : "") + F.yen(S.total_profit),
+        `投入 ${F.yen(S.total_staked)}`));
+      kp.appendChild(tile("未確定", F.num(S.n_open), `${F.yen(S.at_risk)} が確定待ち`));
+      kp.appendChild(tile("期間", S.first_bet === S.last_bet ? S.first_bet : `${S.first_bet} 〜`,
+        `${F.num(S.n_bets)} 点`));
+      const sm0 = slip && slip.summary ? slip.summary : {};
+      kp.appendChild(tile("直近の平均オッズ", sm0.avg_odds == null ? "—" : F.fx(sm0.avg_odds, 1) + "倍",
+        sm0.avg_ev == null ? "" : `平均期待値 ${F.fx(sm0.avg_ev)}`));
+      wrap.appendChild(kp);
+    }
+
+    if (slip) {
+      const c = el("div", { class: "card" });
+      c.appendChild(el("h2", { text: `${slip.date} の推奨購入` }));
+      const sm = slip.summary;
+      c.appendChild(el("div", { class: "desc", text: sm.n_bets
+        ? `${sm.n_races} レース中 ${sm.n_races_bet} レースで期待値が閾値を超えました。` +
+          `合計 ${F.yen(sm.total_stake)}、平均期待値 ${F.fx(sm.avg_ev)}、平均 ${F.fx(sm.avg_odds, 1)} 倍。` +
+          `賭けない判断のほうが多いのが正常です。`
+        : "期待値が閾値を超えた馬はいませんでした。見送りはシステムが働いている状態であって、失敗ではありません。" }));
+      if (sm.n_bets) {
+        const tw = el("div", { class: "tw" });
+        const t = el("table");
+        t.innerHTML = "<thead><tr><th>レース</th><th>馬番・馬</th><th>オッズ</th><th>予測勝率</th><th>期待値</th>" +
+          "<th>購入額</th></tr></thead><tbody>" + slip.bets.map(b => {
+            const race = slip.races.find(r => r.race_id === b.race_id) || {};
+            const run = (race.runners || []).find(r => r.entrant_id === b.entrant_id) || {};
+            return `<tr><td class="num">${race.venue || ""} ${race.race_no || ""}R</td>` +
+              `<td class="num">${run.post_position != null ? run.post_position + "番 " : ""}${b.entrant_id}</td>` +
+              `<td class="num">${F.fx(b.odds, 1)}</td><td class="num">${F.pct(b.prob)}</td>` +
+              `<td class="num">${F.fx(b.ev, 3)}</td><td class="num">${F.yen(b.stake)}</td></tr>`;
+          }).join("") + "</tbody>";
+        t.appendChild(el("caption", { text:
+          `資金 ${F.yen(slip.bankroll)} に対して ${(sm.total_stake / slip.bankroll * 100).toFixed(2)}% を投入。` +
+          `1 日の上限は ${F.pct(slip.policy.max_daily_exposure || 0.2, 0)}。` }));
+        tw.appendChild(t); c.appendChild(tw);
+      }
+      wrap.appendChild(c);
+
+      const cc = el("div", { class: "card" });
+      cc.appendChild(el("h2", { text: "出走表とモデルの確率" }));
+      cc.appendChild(el("div", { class: "desc", text:
+        "全レース分です。行が強調されているのが購入対象。期待値はモデルの勝率にオッズを掛けた値で、1.0 が損益分岐です。" }));
+      slip.races.forEach(r => {
+        const d = el("details", { class: "race-card" });
+        const sum = el("summary");
+        sum.appendChild(el("span", { class: "rno", text: `${r.venue || ""} ${r.race_no}R` }));
+        sum.appendChild(el("span", { class: "cond",
+          text: `${r.distance_m}m ${r.surface || ""} ${r.going || ""} ${r.n_runners}頭` }));
+        sum.appendChild(el("span", { class: "flag" + (r.n_bets ? "" : " none"),
+          text: r.n_bets ? `購入 ${r.n_bets} 点` : "見送り" }));
+        d.appendChild(sum);
+        const inner = el("div", { class: "inner tw" });
+        const t = el("table");
+        t.innerHTML = "<thead><tr><th>馬番</th><th>馬</th><th>騎手</th><th>オッズ</th><th>予測勝率</th><th>期待値</th>" +
+          "<th>購入額</th></tr></thead><tbody>" + r.runners.map(x =>
+            `<tr class="${x.stake > 0 ? "picked" : ""}"><td class="num">${x.post_position != null ? x.post_position : "—"}</td>` +
+            `<td class="num">${x.entrant_id}</td><td class="num">${x.jockey_id || "—"}</td>` +
+            `<td class="num">${x.win_odds == null ? "—" : F.fx(x.win_odds, 1)}</td>` +
+            `<td class="num">${F.pct(x.p_win)}</td>` +
+            `<td class="num" style="color:${(x.ev || 0) >= (slip.policy.ev_threshold || 1) ? "var(--good-ink)" : "var(--ink-2)"}">` +
+            `${x.ev == null ? "—" : F.fx(x.ev, 3)}</td>` +
+            `<td class="num">${x.stake > 0 ? F.yen(x.stake) : "—"}</td></tr>`).join("") + "</tbody>";
+        inner.appendChild(t);
+        d.appendChild(inner);
+        cc.appendChild(d);
+      });
+      wrap.appendChild(cc);
+    }
+
+    const daily = (summary && summary.daily) || [];
+    if (daily.length) {
+      const ch = el("div", { class: "card" });
+      ch.appendChild(el("h2", { text: "確定した日ごとの記録" }));
+      ch.appendChild(el("div", { class: "desc", text:
+        "台帳は追記のみで、決済しても過去の行は書き換えません。結果を知る前に何を決めたかが残ります。" }));
+      const tw = el("div", { class: "tw" });
+      const t = el("table");
+      t.innerHTML = "<thead><tr><th>日付</th><th>点数</th><th>的中</th><th>投入</th><th>損益</th><th>回収率</th>" +
+        "<th>資金</th></tr></thead><tbody>" + daily.slice().reverse().map(d =>
+          `<tr><td class="num">${d.date}</td><td class="num">${F.num(d.n_bets)}</td><td class="num">${F.num(d.n_won)}</td>` +
+          `<td class="num">${F.yen(d.staked)}</td>` +
+          `<td class="num" style="color:${d.profit >= 0 ? "var(--good-ink)" : "var(--critical-ink)"}">${F.yen(d.profit)}</td>` +
+          `<td class="num">${d.recovery == null ? "—" : F.pct(d.recovery)}</td>` +
+          `<td class="num">${F.yen(d.bankroll)}</td></tr>`).join("") + "</tbody>";
+      tw.appendChild(t); ch.appendChild(tw);
+      wrap.appendChild(ch);
+    }
+  }
+
+  async function loadLive(force) {
+    if (!LIVE.root || LIVE.loading || (LIVE.loaded && !force)) return;
+    LIVE.loading = true;
+    try {
+      const get = async (path) => {
+        const r = await fetch(path, { cache: "no-store" });
+        if (!r.ok) return null;
+        return r.json();
+      };
+      const health = await get("/api/health");
+      if (!health) throw new Error("/api/health に応答がありません");
+      const [slip, summary, slips] = await Promise.all([get("/api/today"), get("/api/summary"), get("/api/slips")]);
+      liveRender(slip, summary, (slips || {}).dates || []);
+      LIVE.loaded = true;
+    } catch (err) {
+      liveOffline(err && err.message ? err.message : String(err));
+      LIVE.loaded = true;
+    } finally {
+      LIVE.loading = false;
+    }
+  }
+
   /* ---------- page ---------- */
   function build(D) {
     const app = document.getElementById("app");
     app.innerHTML = "";
     const K = D.kpi, P = D.policy || {}, M = D.model || {}, SW = (D.sweep && D.sweep.summary) || {};
-    const add = n => { app.appendChild(n); return n; };
+    const buckets = {};
+    ["overview", "today", "performance", "model", "roadmap"].forEach(k => { buckets[k] = el("div"); });
+    let PAGE = "overview";
+    const page = k => { PAGE = k; };
+    const add = n => { buckets[PAGE].appendChild(n); return n; };
 
     /* header */
     const head = el("header");
@@ -594,14 +859,6 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       "LightGBM の順位学習で着順を予測し、Plackett-Luce で勝率に変換、Isotonic 回帰で較正した確率を市場オッズと突き合わせ、期待値が閾値を超えた馬にだけ Fractional Kelly で賭けた結果です。" }));
     head.appendChild(brand);
     const right = el("div", { class: "brand" });
-    const btn = el("button", { class: "theme", type: "button", text: "テーマ切替" });
-    btn.addEventListener("click", () => {
-      const cur = document.documentElement.getAttribute("data-theme");
-      const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-      document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
-      window.dispatchEvent(new Event("resize"));
-    });
-    right.appendChild(btn);
     right.appendChild(el("div", { class: "meta", html:
       `<span>対象 <b>${(D.backtest_window || {}).start || "—"} 〜 ${(D.backtest_window || {}).end || "—"}</b></span>` +
       `<span>生成 <b>${D.generated_at}</b></span>` }));
@@ -641,9 +898,13 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     kp.appendChild(tile("平均期待値", F.fx(K.avg_ev_bet), `閾値 ${F.fx(P.ev_threshold)} を超えた馬だけ購入`));
     add(kp);
 
-    /* improvement roadmap - placed here because the KPIs above are what it exists to make trustworthy */
+    page("roadmap");
+    /* improvement roadmap: its own page, because it is read on its own */
     if (D.roadmap && (D.roadmap.tasks || []).length) add(roadmapCard(D.roadmap));
+    page("today");
+    add(livePage(D));
 
+    page("overview");
     /* equity curve */
     const c1 = el("div", { class: "card" });
     c1.appendChild(el("h2", { text: "資産曲線" }));
@@ -673,6 +934,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       tip: p => `<b>${p.label}</b><br><span class="k">ドローダウン</span>${F.pct(p.y)}`,
     });
 
+    page("performance");
     /* Kelly curve: small multiples, one scale each */
     const grid = D.sweep.grid || [];
     const sel = SW.selected || {};
@@ -770,6 +1032,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       add(c5);
     }
 
+    page("model");
     /* calibration */
     if ((M.reliability || []).length) {
       const c6 = el("div", { class: "card" });
@@ -801,6 +1064,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       calibChart(h6, M.reliability);
     }
 
+    page("performance");
     /* monthly P/L */
     if ((D.monthly || []).length) {
       const c7 = el("div", { class: "card" });
@@ -860,6 +1124,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       add(c9);
     }
 
+    page("model");
     /* model quality */
     const cA = el("div", { class: "card" });
     cA.appendChild(el("h2", { text: "モデルの素の性能" }));
@@ -956,6 +1221,7 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
     cB.appendChild(rb);
     add(cB);
 
+    page("overview");
     /* footer */
     const ft = el("footer");
     ft.appendChild(el("div", { html:
@@ -970,9 +1236,138 @@ footer pre{background:var(--surface); border:1px solid var(--border); border-rad
       "python src/web/export_dashboard.py --output web/data.json" }));
     ft.appendChild(el("div", { text: "このページは backtest_results/ と artifacts/ の出力から自動生成されています。" }));
     add(ft);
+
+    mountShell(app, D, buckets, head);
+  }
+
+  /* ---------- shell: app bar, drawer, hash router ---------- */
+  const ICONS = {
+    overview: 'M3 12h4l3 7 4-16 3 9h4',
+    today: 'M4 5h12v12H4zM4 9h12M8 3v3M12 3v3',
+    performance: 'M4 16V9M9 16V4M14 16v-5M3.5 18h13',
+    model: 'M10 3v4M10 13v4M3 10h4M13 10h4M10 10m-3 0a3 3 0 106 0 3 3 0 10-6 0',
+    roadmap: 'M4 5h9M4 10h12M4 15h6M16.5 13.5l1.5 1.5-3 3-2-.5.5-2z',
+  };
+  const icon = (k) => `<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" ` +
+    `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS[k] || ICONS.overview}"/></svg>`;
+
+  function mountShell(app, D, buckets, overviewHead) {
+    const tasks = (D.roadmap && D.roadmap.tasks) || [];
+    const openTasks = tasks.filter(t => t.status !== "done").length;
+    const PAGES = [
+      { id: "overview", label: "概要", title: "概要",
+        lead: "直近のバックテストの結果と、そこから読み取れることの要約です。" },
+      { id: "today", label: "本日の予想", title: "本日の予想",
+        lead: "当日の出走表に対するモデルの確率と、期待値が閾値を超えた馬への推奨購入額です。ローカル API から取得します。" },
+      { id: "performance", label: "成績の内訳", title: "成績の内訳",
+        lead: "賭け方のパラメータ感度、期間別・オッズ帯別の成績、探索期間とホールドアウトの差です。" },
+      { id: "model", label: "モデルの中身", title: "モデルの中身",
+        lead: "予測そのものの精度、確率の較正、特徴量ごとの寄与、効いている安全装置です。" },
+      { id: "roadmap", label: "改善ロードマップ", title: "改善ロードマップ", count: openTasks,
+        lead: "精度を上げるために積んであるタスクを、優先度順に並べています。" },
+    ];
+
+    app.innerHTML = "";
+    const bar = el("div", { class: "appbar" });
+    const burger = el("button", { class: "iconbtn", type: "button", "aria-label": "ページを開く",
+      "aria-expanded": "false", html:
+      '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+      'stroke-linecap="round" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14"/></svg>' });
+    bar.appendChild(burger);
+    bar.appendChild(el("span", { class: "name", text: "EquineAlpha" }));
+    bar.appendChild(el("span", { class: "sep" }));
+    const crumb = el("span", { class: "page", text: "" });
+    bar.appendChild(crumb);
+    bar.appendChild(el("span", { class: "spacer" }));
+    const themeBtn = el("button", { class: "iconbtn", type: "button", "aria-label": "テーマ切替", html:
+      '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" ' +
+      'aria-hidden="true"><path d="M16 11.4A6.6 6.6 0 018.6 4a6.6 6.6 0 100 13.2 6.6 6.6 0 007.4-5.8z"/></svg>' });
+    themeBtn.addEventListener("click", () => {
+      const cur = document.documentElement.getAttribute("data-theme");
+      const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+      try { localStorage.setItem("ea.theme", dark ? "light" : "dark"); } catch (e) { /* private window */ }
+      window.dispatchEvent(new Event("resize"));
+    });
+    bar.appendChild(themeBtn);
+    app.appendChild(bar);
+
+    const drawer = document.getElementById("drawer");
+    const backdrop = document.getElementById("backdrop");
+    drawer.innerHTML = "";
+    drawer.hidden = false;
+    backdrop.hidden = false;
+    const dh = el("div", { class: "head" });
+    dh.appendChild(el("div", { class: "t", text: "EquineAlpha" }));
+    dh.appendChild(el("div", { class: "s", text: D.is_synthetic ? "合成データによるデモ" : "実データ" }));
+    drawer.appendChild(dh);
+    const nav = el("nav");
+    const navBtns = {};
+    PAGES.forEach(pg => {
+      const b = el("button", { class: "navitem", type: "button", html: icon(pg.id) });
+      b.appendChild(el("span", { text: pg.label }));
+      if (pg.count) b.appendChild(el("span", { class: "cnt", text: String(pg.count) }));
+      b.addEventListener("click", () => { location.hash = "#" + pg.id; closeDrawer(); });
+      nav.appendChild(b);
+      navBtns[pg.id] = b;
+    });
+    drawer.appendChild(nav);
+    drawer.appendChild(el("div", { class: "foot", text: `生成 ${D.generated_at}` }));
+
+    const openDrawer = () => {
+      drawer.classList.add("open"); backdrop.classList.add("open");
+      burger.setAttribute("aria-expanded", "true");
+      (nav.querySelector('[aria-current="page"]') || nav.firstElementChild).focus();
+    };
+    const closeDrawer = () => {
+      drawer.classList.remove("open"); backdrop.classList.remove("open");
+      burger.setAttribute("aria-expanded", "false");
+    };
+    burger.addEventListener("click", () => (drawer.classList.contains("open") ? closeDrawer() : openDrawer()));
+    backdrop.addEventListener("click", closeDrawer);
+    document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+    const main = el("div");
+    PAGES.forEach(pg => {
+      const sec = el("div", { class: "page-body", id: "page-" + pg.id });
+      sec.hidden = true;
+      const ph = el("div", { class: "pagehead" });
+      if (pg.id === "overview" && overviewHead) {
+        sec.appendChild(overviewHead);
+      } else {
+        ph.appendChild(el("h1", { text: pg.title }));
+        ph.appendChild(el("p", { text: pg.lead }));
+        sec.appendChild(ph);
+      }
+      sec.appendChild(buckets[pg.id]);
+      main.appendChild(sec);
+    });
+    app.appendChild(main);
+
+    function show(id) {
+      const pg = PAGES.find(x => x.id === id) || PAGES[0];
+      PAGES.forEach(x => { document.getElementById("page-" + x.id).hidden = x.id !== pg.id; });
+      Object.entries(navBtns).forEach(([k, b]) =>
+        (k === pg.id ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
+      crumb.textContent = pg.title;
+      document.title = "EquineAlpha";
+      try { localStorage.setItem("ea.page", pg.id); } catch (e) { /* private window */ }
+      window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+      window.dispatchEvent(new Event("resize"));   // charts built while hidden measure zero
+      if (pg.id === "today") loadLive();
+    }
+    window.addEventListener("hashchange", () => show(location.hash.replace("#", "")));
+    let startPage = location.hash.replace("#", "");
+    if (!startPage) { try { startPage = localStorage.getItem("ea.page") || ""; } catch (e) { startPage = ""; } }
+    show(PAGES.some(x => x.id === startPage) ? startPage : "overview");
   }
 
   /* ---------- boot ---------- */
+  try {
+    const saved = localStorage.getItem("ea.theme");
+    if (saved === "dark" || saved === "light") document.documentElement.setAttribute("data-theme", saved);
+  } catch (e) { /* private window or blocked storage */ }
+
   const inline = document.getElementById("dashboard-data");
   const start = (D) => {
     try { build(D); }

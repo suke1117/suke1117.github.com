@@ -39,6 +39,8 @@ pip install -r requirements.txt
 | 推論 | `python src/models/predict.py --data processed/train.csv --model_dir artifacts/` |
 | 特徴量の寄与測定 | `python src/models/ablation.py --each --seeds 3` |
 | ダッシュボード | `python src/web/export_dashboard.py --output web/data.json` |
+| 当日の推奨購入 | `python src/live/paper_trader.py bet --provider demo` |
+| ローカル API とダッシュボード | `python src/live/api.py` |
 | テスト | `python -m pytest tests/ -q` |
 | 全部 | `make all` |
 
@@ -114,10 +116,69 @@ EV 閾値と Kelly 係数をウォークフォワードで探索します。ウ�
 選ばれたのは α=0.02、EV≥1.30、1レース1点でした。α を 0.02 から 0.25 に上げると収益は増えますが、
 最大ドローダウンは 6% から 52.5% へと収益より速く悪化します。これが Fractional Kelly を採用する理由です。
 
+## 当日のペーパー賭け
+
+バックテストと同じコードで当日の出走表を処理します。履歴を当日より前の日に絞ってから特徴量を作り直すので、
+出走馬が自分のレースを参照することはありません。
+
+```bash
+python src/live/paper_trader.py bet --provider demo     # 推奨購入を出して台帳に記録
+python src/live/paper_trader.py settle --date <date> --provider demo
+python src/live/paper_trader.py status
+python src/live/api.py                                  # http://127.0.0.1:8787
+```
+
+### データの取り込み
+
+JRA に公開 API はありません。使える経路は次の 3 つで、どれを選んでもその先の処理は同じです。
+
+| プロバイダ | 使う場面 | 必要なもの |
+|---|---|---|
+| `--provider jravan` | 公式の有料購読 | JRA-VAN Data Lab. の契約、Windows、JV-Link、pywin32 |
+| `--provider csv` | 購読が無くても今日から動かす | `live_data/cards/<date>.csv` と `live_data/odds/<date>.csv` |
+| `--provider http` | 任意の JSON API | `live_data/provider.yml` で URL と項目名を対応づける (`provider.yml.example` 参照) |
+| `--provider demo` | 動作確認 | 履歴の 1 日を再生する。購読も設定も不要 |
+
+CSV の雛形は `python src/live/paper_trader.py template --date <date>` で作れます。
+
+### 台帳
+
+`live_data/ledger.jsonl` は追記のみです。決済しても過去の行は書き換えないので、
+結果を知る前に何を決めたかが必ず残ります。編集できる賭け記録は、負けた後に編集してしまうものだからです。
+
+### 安全装置 (当日運用)
+
+1 日の合計投入額は資金の 20% (`MAX_DAILY_EXPOSURE`) を超えません。バックテストはレース間で資金が動くため
+自然に制限がかかりますが、当日は全レースが同時に未確定になるため別の上限が要ります。
+同じ日に二重に賭けることも台帳がブロックします。
+
+### API
+
+`python src/live/api.py` がダッシュボードと JSON を同一オリジンで配信します。認証はないのでループバック限定です。
+
+| エンドポイント | 内容 |
+|---|---|
+| `GET /api/health` | 稼働状況と、どのデータが揃っているか |
+| `GET /api/today?date=` | 当日の全出走馬の確率・オッズ・期待値・推奨購入額 |
+| `GET /api/ledger?limit=` | ペーパー賭けの記録 |
+| `GET /api/summary` | 資金、回収率、日ごとの履歴 |
+| `GET /api/slips` | 予想を作成済みの日付一覧 |
+
 ## ダッシュボード
 
-`web/index.html` はバックテストと探索の結果を可視化する静的ページです。`web/data.json` を読み込むだけなので、
+`web/index.html` はハンバーガーメニューで 5 ページに分かれた静的ページです。`web/data.json` を読み込むだけなので、
 バックテストを回すたびに書き出し直せば内容が更新されます。GitHub Pages でそのまま配信できます。
+
+| ページ | 内容 |
+|---|---|
+| 概要 | 成績 KPI、資産曲線、ドローダウン |
+| 本日の予想 | ローカル API から当日の出走表と推奨購入を取得 (API 未起動時は手順を表示) |
+| 成績の内訳 | α と期待値閾値の感度、探索とホールドアウトの差、月次・オッズ帯別・期別 |
+| モデルの中身 | 確率較正、特徴量 family ごとの寄与、モデル単体の精度、安全装置 |
+| 改善ロードマップ | 優先度つきタスク |
+
+「本日の予想」だけはライブのデータを読むため、ローカル API 経由で開く必要があります。
+公開されているダッシュボードは静的なスナップショットです。
 
 ```bash
 make dashboard     # data.json の書き出しと、データを埋め込んだ単体 HTML のビルド

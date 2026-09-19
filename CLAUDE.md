@@ -23,7 +23,9 @@ src/
   betting/     Kelly 計算 (kelly_calculator.py CLI), ベット選択戦略 (strategy.py)
   backtest/    ウォークフォワード・ペーパーベッティング simulator.py CLI, パラメータ探索 sweep.py CLI, metrics.py
   web/         ダッシュボード用データ書き出し export_dashboard.py, 単体HTMLビルド build_static.py
-web/           静的ダッシュボード (index.html + data.json)
+  live/        当日運用: providers/ (差し替え可能なデータ取得), paper_trader.py CLI, ledger.py, api.py
+web/           静的ダッシュボード (index.html + data.json)。ハンバーガーメニューで5ページ構成
+live_data/     当日の出走表・オッズ・結果・台帳 (git 管理外)
 docs/roadmap.yml  優先度つき改善タスク (ダッシュボードに表示される)
 tests/         pytest (リーク検査・確率整合性・Kelly 制約を含む)
 raw_data/      JRA-VAN CSV エクスポート置き場 (git 管理外)
@@ -48,6 +50,8 @@ artifacts/     学習済みモデル・較正器 (git 管理外)
 4. **保守的な資金管理（負けないロジック）**:
    - ベッティングモジュールでは、フル・ケリーを絶対に使用しない。期待値 (EV) がユーザー定義の閾値（例: 1.05）を超える場合のみ発火し、賭け金は Fractional Kelly (デフォルトα=0.1) を上限とする制約をハードコードすること。
    - `src/common/config.py` の `MAX_KELLY_ALPHA` (=0.25) を超える α は例外として拒否する。1レースあたりの投入額は `MAX_RACE_EXPOSURE` (資金の 5%) を超えない。
+   - 当日運用では 1 日の合計投入額が `MAX_DAILY_EXPOSURE` (資金の 20%) を超えない。バックテストはレース間で資金が
+     動くため自然に制限がかかるが、当日は全レースが同時に未確定になるため別途上限が要る。
 5. **条件別集計は縮小推定を通す**:
    - 条件別 (騎手 × 競馬場、馬 × 馬場状態、馬 × 騎手 など) の勝率・着順は、セルあたりの標本が
      すぐ枯渇する。生の集計値を特徴量にしてはならない。`_shrunk_rate` で親の値へ縮小すること。
@@ -88,6 +92,25 @@ python -m pytest tests/ -q
 ```
 
 全フェーズの CLI を順に流す統合チェック: `make all` (Makefile 参照)。
+
+## 4b. Live Paper Betting
+
+当日運用はバックテストと同じコードを通る。履歴に当日の出走表を追加し、as-of 特徴量を作り直し、
+同じ Plackett-Luce と Isotonic を通し、同じ Fractional Kelly で賭け金を決める。
+履歴は当日より**厳密に前**の日だけに絞るため、出走馬が自分のレースを見ることはない。
+
+- データ取得は `src/live/providers/` の差し替え可能なプロバイダ。JRA に公開 API は無いため、
+  `jravan` (公式有料購読・Windows)、`csv` (自前のファイル)、`http` (任意の JSON、設定ファイルで項目対応)、
+  `demo` (履歴の 1 日を再生) の 4 つを用意している。新しい取得元はプロバイダを 1 つ足すだけでよい。
+- 台帳 `src/live/ledger.py` は追記のみ。決済時も過去の行を書き換えず、結果を知る前に何を決めたかを残す。
+- `src/live/api.py` がダッシュボードと JSON を同一オリジンで配信する。認証は無いのでループバックに限る。
+
+```
+python src/live/paper_trader.py bet    --provider demo     # 当日の推奨購入
+python src/live/paper_trader.py settle --date <date> --provider demo
+python src/live/paper_trader.py status
+python src/live/api.py                                     # http://127.0.0.1:8787
+```
 
 ## 5. Improvement Roadmap
 

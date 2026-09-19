@@ -13,6 +13,7 @@ MAX_KELLY_ALPHA: float = 0.25       # anything above this is rejected outright
 MIN_KELLY_ALPHA: float = 0.01
 DEFAULT_EV_THRESHOLD: float = 1.05  # expected value = p * decimal_odds must exceed this
 MAX_RACE_EXPOSURE: float = 0.05     # max fraction of bankroll staked on one race
+MAX_DAILY_EXPOSURE: float = 0.20    # max fraction of bankroll staked across one race day
 MAX_SINGLE_BET_FRACTION: float = 0.03  # max fraction of bankroll on one ticket
 MIN_WIN_PROB_TO_BET: float = 0.02   # do not bet on extreme long-shots (model noise)
 MAX_STAKE_YEN: float = 1_000_000.0  # liquidity cap: larger tickets move pari-mutuel odds against you

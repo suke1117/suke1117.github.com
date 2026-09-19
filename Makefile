@@ -31,3 +31,9 @@ dashboard:
 
 ablation:
 	$(PY) src/models/ablation.py --each --seeds 3 --output backtest_results/ablation.csv
+
+paper:
+	$(PY) src/live/paper_trader.py bet --provider demo
+
+serve:
+	$(PY) src/live/api.py

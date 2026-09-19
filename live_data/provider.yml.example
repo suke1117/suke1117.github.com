@@ -1,0 +1,49 @@
+# Copy to live_data/provider.yml and point it at a JSON source you have the
+# right to call. Nothing here is specific to any vendor: {date} is substituted,
+# ${VAR} reads the environment, and `fields` maps a canonical column to the key
+# the source uses. See src/live/providers/http_json.py.
+
+date_format: "%Y-%m-%d"
+
+headers:
+  Authorization: "Bearer ${RACING_API_TOKEN}"
+
+card:
+  url: "https://example.invalid/v1/cards?date={date}"
+  root: "data.runners"          # dotted path to the list of runners
+  fields:
+    race_id: raceId
+    race_date: date
+    venue: courseCode
+    race_no: raceNumber
+    distance_m: distanceMeters
+    surface: surface            # turf / dirt
+    going: trackCondition       # good / yielding / soft / heavy
+    race_class: raceClass
+    entrant_id: horseId
+    post_position: horseNumber
+    draw: bracketNumber
+    jockey_id: jockeyId
+    trainer_id: trainerId
+    age: age
+    sex: sex
+    weight_carried: carriedWeightKg
+    body_weight: bodyWeightKg
+    body_weight_diff: bodyWeightDiffKg
+
+odds:
+  url: "https://example.invalid/v1/odds?date={date}"
+  root: "data"
+  fields:
+    race_id: raceId
+    entrant_id: horseId
+    win_odds: winOdds           # decimal, e.g. 10.0 pays 1000 per 100 staked
+
+# optional; without it, settle with --provider csv
+results:
+  url: "https://example.invalid/v1/results?date={date}"
+  root: "data"
+  fields:
+    race_id: raceId
+    entrant_id: horseId
+    finish_position: finishPosition

@@ -13,6 +13,7 @@
 | 市場ブレンド | `src/models/market_blend.py` (Benter 条件付きロジット) | なし |
 | 資金管理 | `src/betting/kelly_calculator.py`, `src/betting/strategy.py` | なし |
 | 検証 | `src/backtest/simulator.py`, `src/backtest/sweep.py`, `src/backtest/metrics.py` | なし |
+| 当日運用 | `src/live/providers/` (取得), `paper_trader.py` (執行), `ledger.py` (記録), `api.py` (配信) | **取得層のみあり** |
 | 可視化 | `src/web/export_dashboard.py`, `src/web/build_static.py`, `web/index.html` | なし |
 | 競技定数 | `src/common/sport.py` (`SportSpec`: 競馬 18 頭 / 競輪 9 車 / 競艇 6 艇) | 定義のみ |
 
@@ -121,7 +122,34 @@ p_i ∝ exp(a·log p_model_i + b·log p_market_i)         # Benter ブレンド 
 YAML の折り返し (`>-`) は行を空白で連結するため、日本語では文中に隙間が残る。
 `normalize_text` が非 ASCII 文字どうしの間の空白のみを除去する (ASCII が隣接する空白は保持する)。
 
-## 8. 競輪・競艇への拡張手順
+## 8. 当日運用の経路
+
+```
+provider.fetch_card(date) ──┐
+provider.fetch_odds(date) ──┤
+                            ├─▶ 履歴 (date より前だけ) + 当日 ─▶ build_features ─▶ 当日の行
+processed/races.csv ────────┘                                              │
+processed/entries.csv                                                      ▼
+                                              Predictor (PL → Isotonic → blend) ─▶ p_win
+                                                                           │
+                                              select_win_bets (Fractional Kelly) ─▶ 推奨購入
+                                                                           │
+                                          ledger.jsonl (追記のみ) + slips/<date>.json
+                                                                           │
+                                                          api.py ─▶ ダッシュボード「本日の予想」
+```
+
+バックテストとの違いは入力の出どころだけで、特徴量・確率・賭け金の決定はすべて同じコードを通る。
+これは意図的な制約で、当日だけ別経路にすると、バックテストが検証した対象と実際に動くものが乖離する。
+
+リークの防ぎ方も同じ。`build_today` は履歴を当日より**厳密に前**の日に絞ってから `build_features` を呼ぶ。
+テストは、当日の行の as-of カウント (出走回数、騎乗回数、条件別回数) が
+全履歴から作った参照テーブルと一致することを検査している。
+
+当日固有の安全装置として `MAX_DAILY_EXPOSURE` (資金の 20%) がある。バックテストではレース間で資金が
+動くため自然に制限がかかるが、当日は全レースが同時に未確定になるため、別の上限が必要になる。
+
+## 9. 競輪・競艇への拡張手順
 
 1. `src/data/sources/keirin_csv.py` などに `DataSource` を実装し、`races` / `entries` を返す
    (`entrant_id` = 選手登録番号、`jockey_id` / `trainer_id` は `entrant_id` と同じ値でよい)。

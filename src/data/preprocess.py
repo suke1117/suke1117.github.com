@@ -8,6 +8,8 @@ Usage:
 Outputs:
     <output>/train.csv        one row per (race, entrant) with features + label + market columns
     <output>/features.json    ordered list of feature columns and categorical columns
+    <output>/races.csv        normalized race history (the live path appends today's card to this)
+    <output>/entries.csv      normalized entry history
 """
 from __future__ import annotations
 
@@ -61,6 +63,10 @@ def main(input_dir: str, output_dir: str, synthetic: bool, start: str, end: str,
              ", ".join(f"{g}={len(c)}" for g, c in feature_groups.items()))
 
     table.to_csv(out / "train.csv", index=False)
+    # the live paper-betting path re-derives features from history + today's card,
+    # so the normalized frames have to survive, not just the feature table
+    races.to_csv(out / "races.csv", index=False)
+    entries.to_csv(out / "entries.csv", index=False)
     meta = {
         "feature_columns": feature_cols,
         "categorical_columns": [c for c in CATEGORICAL_FEATURES if c in feature_cols],
@@ -72,7 +78,8 @@ def main(input_dir: str, output_dir: str, synthetic: bool, start: str, end: str,
         "feature_groups": feature_groups,
     }
     (out / "features.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
-    log.info("wrote %s and %s", out / "train.csv", out / "features.json")
+    log.info("wrote %s, %s, %s, %s", out / "train.csv", out / "features.json", out / "races.csv",
+             out / "entries.csv")
 
 
 if __name__ == "__main__":
