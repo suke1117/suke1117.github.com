@@ -16,6 +16,8 @@ Endpoints
     GET /api/ledger[?limit=]     paper bets, newest first
     GET /api/summary             bankroll, recovery rate, per-day history
     GET /api/config              the policy in force
+    GET /api/explained           the index of explained race days
+    GET /api/explained/<date>    one day: every race, every runner, every reason
 
 Binds to 127.0.0.1 by default. This server has no authentication, so do not
 put it on a public interface; ``--host`` exists for containers, not for the
@@ -49,11 +51,23 @@ STATIC: Dict[str, Tuple[str, str]] = {
 
 
 class Config:
-    def __init__(self, root: Path, ledger_path: str, slip_dir: str, start_bankroll: float):
+    def __init__(self, root: Path, ledger_path: str, slip_dir: str, start_bankroll: float,
+                 explained_dir: str = "live_data/explained"):
         self.root = root
         self.ledger_path = root / ledger_path
         self.slip_dir = root / slip_dir
         self.start_bankroll = start_bankroll
+        self.explained_dir = root / explained_dir
+
+    def explained_index(self) -> Dict:
+        path = self.explained_dir / "index.json"
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"days": []}
+
+    def explained_day(self, date: str) -> Optional[Dict]:
+        if not date or any(c in date for c in "/\\."):   # the date is a filename; keep it one
+            return None
+        path = self.explained_dir / f"{date}.json"
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
     def ledger(self) -> Ledger:
         return Ledger(self.ledger_path, self.start_bankroll)
@@ -139,6 +153,14 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/summary":
                 led = self.cfg.ledger()
                 return self._json({"summary": led.summary(), "daily": led.daily()})
+            if route == "/api/explained":
+                return self._json(self.cfg.explained_index())
+            if route.startswith("/api/explained/"):
+                payload = self.cfg.explained_day(route[len("/api/explained/"):])
+                if payload is None:
+                    return self._error(404, "no explained data for that date",
+                                       "run: python src/live/explain.py archive --days 7")
+                return self._json(payload)
             if route == "/api/config":
                 slip = self.cfg.slip(None) or {}
                 return self._json({"policy": slip.get("policy"), "provider": slip.get("provider"),
@@ -155,9 +177,10 @@ class Handler(BaseHTTPRequestHandler):
 @click.option("--root", default=".", show_default=True, help="repository root")
 @click.option("--ledger", "ledger_path", default="live_data/ledger.jsonl", show_default=True)
 @click.option("--slips", "slip_dir", default="live_data/slips", show_default=True)
+@click.option("--explained", "explained_dir", default="live_data/explained", show_default=True)
 @click.option("--start_bankroll", type=float, default=DEFAULT_BANKROLL_YEN, show_default=True)
-def main(host, port, root, ledger_path, slip_dir, start_bankroll):
-    Handler.cfg = Config(Path(root).resolve(), ledger_path, slip_dir, start_bankroll)
+def main(host, port, root, ledger_path, slip_dir, explained_dir, start_bankroll):
+    Handler.cfg = Config(Path(root).resolve(), ledger_path, slip_dir, start_bankroll, explained_dir)
     if host not in ("127.0.0.1", "localhost", "::1"):
         log.warning("binding to %s: this server has no authentication", host)
     srv = ThreadingHTTPServer((host, port), Handler)

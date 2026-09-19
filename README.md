@@ -39,6 +39,7 @@ pip install -r requirements.txt
 | 4b パラメータ探索 | `python src/backtest/sweep.py --start_date 2021-01-01 --end_date 2023-12-31 --holdout_start 2023-04-01` |
 | 推論 | `python src/models/predict.py --data processed/train.csv --model_dir artifacts/` |
 | 特徴量の寄与測定 | `python src/models/ablation.py --each --seeds 3` |
+| 予想の根拠を書き出す | `python src/live/explain.py archive --days 7` |
 | ダッシュボード | `python src/web/export_dashboard.py --output web/data.json` |
 | 当日の推奨購入 | `python src/live/paper_trader.py bet --provider demo` |
 | ローカル API とダッシュボード | `python src/live/api.py` |
@@ -151,6 +152,33 @@ EV 閾値と Kelly 係数をウォークフォワードで探索します。ウ�
 選ばれたのは α=0.02、EV≥1.30、1レース1点でした。α を 0.02 から 0.25 に上げると収益は増えますが、
 最大ドローダウンは 6% から 52.5% へと収益より速く悪化します。これが Fractional Kelly を採用する理由です。
 
+## 予想ページ
+
+このシステムの中心です。開催日を選ぶとレース一覧、レースを選ぶと出走表と買い目、
+出走表の行を押すとその馬の評価の根拠が出ます。
+
+```bash
+python src/live/explain.py archive --days 7      # 説明付きのレース日を書き出す
+python src/web/export_dashboard.py --output web/data.json
+python src/live/api.py                            # 全日分を見るならローカル API 経由で
+```
+
+### 根拠は 3 層で示します
+
+| 層 | 内容 |
+|---|---|
+| 決定 | 買うか見送るか、**どのルールがそう決めたか**。全馬に理由が付きます |
+| 値付け | スコア → Plackett-Luce → Isotonic 較正 → 市場ブレンド、と市場の見方 |
+| 根拠 | 各特徴量がスコアをどちらへ動かしたか。**合計はスコアと厳密に一致します** |
+
+見送りも判断なので理由を出します。「期待値 0.92 が閾値 1.15 に届かない」「予測勝率が下限 2% 未満」
+「同じレースでより配分の大きい上位 1 点に入らなかった」のように、落ちたルールを名指しします。
+
+寄与が説明するのは**スコア**であって確率ではありません。後段の Plackett-Luce・較正・市場ブレンドは
+出走馬全体をまとめて変形するためで、個別の寄与には分解できません。この区別はページにも書いてあります。
+
+ページに埋め込むのは直近 3 日分です (`--embed_days`)。それ以前の日はローカル API から読み込みます。
+
 ## 当日のペーパー賭け
 
 バックテストと同じコードで当日の出走表を処理します。履歴を当日より前の日に絞ってから特徴量を作り直すので、
@@ -207,6 +235,8 @@ CSV の雛形は `python src/live/paper_trader.py template --date <date>` で作
 | `GET /api/ledger?limit=` | ペーパー賭けの記録 |
 | `GET /api/summary` | 資金、回収率、日ごとの履歴 |
 | `GET /api/slips` | 予想を作成済みの日付一覧 |
+| `GET /api/explained` | 説明付きレース日の一覧 |
+| `GET /api/explained/<date>` | その日の全レース・全馬・全判断理由 |
 
 ## ダッシュボード
 
@@ -215,6 +245,7 @@ CSV の雛形は `python src/live/paper_trader.py template --date <date>` で作
 
 | ページ | 内容 |
 |---|---|
+| 予想 | 日付ごとのレース一覧、出走表、買い目とその根拠。**このサービスの中心** |
 | 概要 | 成績 KPI、資産曲線、ドローダウン |
 | 本日の予想 | ローカル API から当日の出走表と推奨購入を取得 (API 未起動時は手順を表示) |
 | 成績の内訳 | α と期待値閾値の感度、探索とホールドアウトの差、月次・オッズ帯別・期別 |

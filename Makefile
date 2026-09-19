@@ -40,3 +40,6 @@ serve:
 
 plan:
 	$(PY) src/backtest/target_planner.py --target 4.0 --days 2 --output backtest_results/target_plan.json
+
+explain:
+	$(PY) src/live/explain.py archive --days 7

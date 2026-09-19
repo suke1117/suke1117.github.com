@@ -149,7 +149,31 @@ processed/entries.csv                                                      ▼
 当日固有の安全装置として `MAX_DAILY_EXPOSURE` (資金の 20%) がある。バックテストではレース間で資金が
 動くため自然に制限がかかるが、当日は全レースが同時に未確定になるため、別の上限が必要になる。
 
-## 9. 競輪・競艇への拡張手順
+## 9. 予想の説明 (予想ページ)
+
+```
+processed/train.csv ─▶ Predictor ─▶ p_win, score
+                                      │
+              booster.predict(pred_contrib=True) ─▶ 特徴量ごとのスコア寄与 (合計 = スコア)
+                                      │
+                 select_bets ─▶ 買い目 ─▶ decision_for ─▶ 全馬に「なぜ」
+                                      │
+                       live_data/explained/<date>.json ─▶ data.json (直近3日) / API (全日)
+```
+
+設計上の制約が 3 つある。
+
+1. **寄与の合計はスコアと厳密に一致する** (`test_contributions_sum_exactly_to_the_score`)。
+   残差に何かが残る説明は、残った分だけ嘘になる。
+2. **寄与が説明するのはスコアであって確率ではない**。Plackett-Luce・較正・市場ブレンドは
+   出走馬全体をまとめて変形するため、個別の寄与に分解できない。ページにもそう書く。
+3. **見送りにも理由を付ける**。`decision_for` は閾値・下限勝率・点数上限・最低購入単位のどれで
+   落ちたかを返す。券種をまたいで判定するため、複勝で買った馬が「見送り」と表示されることはない。
+
+ペイロードの大半は寄与度なので、上位の有力馬 (`--max_explained`) と購入対象の馬だけ保持する。
+決定理由は全馬が持つ。「なぜこの馬を買わなかったか」は製品価値の半分だからである。
+
+## 10. 競輪・競艇への拡張手順
 
 1. `src/data/sources/keirin_csv.py` などに `DataSource` を実装し、`races` / `entries` を返す
    (`entrant_id` = 選手登録番号、`jockey_id` / `trainer_id` は `entrant_id` と同じ値でよい)。

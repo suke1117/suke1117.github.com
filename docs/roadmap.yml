@@ -148,6 +148,22 @@ tasks:
       docs に記録される。
     files: [raw_data/, src/data/sources/jravan_csv.py]
 
+  - id: P1x
+    title: 予想ページを当日のカードに接続する
+    category: market
+    priority: P1
+    effort: S
+    status: todo
+    impact: 製品として使えるか
+    why: >-
+      予想ページは保存済みのレース日を読む。当日の出走表に対しても同じ画面を出すには、
+      paper_trader の買い目生成が explain と同じ構造を書き出す必要がある。
+      いまは当日は「本日の予想」ページ、過去は「予想」ページと分かれていて、同じものが二箇所にある。
+    done: >-
+      paper_trader bet が explained と同じ形式で当日分を書き出し、予想ページが当日を先頭の日付として扱う。
+      「本日の予想」ページは統合して廃止する。
+    files: [src/live/paper_trader.py, src/live/explain.py, web/index.html]
+
   - id: L1
     title: 発走時刻とオッズ取得時刻を記録する
     category: market

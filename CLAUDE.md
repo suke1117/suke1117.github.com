@@ -23,9 +23,11 @@ src/
   betting/     Kelly 計算 (kelly_calculator.py CLI), ベット選択戦略 (strategy.py)
   backtest/    ウォークフォワード・ペーパーベッティング simulator.py CLI, パラメータ探索 sweep.py CLI, metrics.py
   web/         ダッシュボード用データ書き出し export_dashboard.py, 単体HTMLビルド build_static.py
-  live/        当日運用: providers/ (差し替え可能なデータ取得), paper_trader.py CLI, ledger.py, api.py
-web/           静的ダッシュボード (index.html + data.json)。ハンバーガーメニューで5ページ構成
-live_data/     当日の出走表・オッズ・結果・台帳 (git 管理外)
+  live/        当日運用: providers/ (差し替え可能なデータ取得), paper_trader.py CLI, ledger.py, api.py,
+               explain.py (買い目の根拠を書き出す CLI。予想ページのデータ源)
+web/           静的ダッシュボード (index.html + data.json)。ハンバーガーメニューで6ページ構成
+               先頭が「予想」(日付 → レース → 出走表 → その馬の根拠)、残りが検証系
+live_data/     当日の出走表・オッズ・結果・台帳、説明付きレース日 explained/ (git 管理外)
 docs/roadmap.yml  優先度つき改善タスク (ダッシュボードに表示される)
 tests/         pytest (リーク検査・確率整合性・Kelly 制約を含む)
 raw_data/      JRA-VAN CSV エクスポート置き場 (git 管理外)
@@ -120,6 +122,24 @@ python src/live/paper_trader.py bet    --provider demo     # 当日の推奨購�
 python src/live/paper_trader.py settle --date <date> --provider demo
 python src/live/paper_trader.py status
 python src/live/api.py                                     # http://127.0.0.1:8787
+```
+
+## 4c. 予想の説明責任
+
+推奨の根拠は必ず 3 層で示す。後付けの物語ではなく、実際に判断したモデルから取り出すこと。
+
+1. **決定**: 買うか見送るか、**どのルールがそう決めたか**。見送りは判断であって不在ではないので、
+   全馬に理由を持たせる。`decision_for` が閾値・下限勝率・点数上限・最低購入単位のどれで落ちたかを返す。
+   単勝以外で買った馬を「見送り」と表示してはならない (券種をまたいで判定すること)。
+2. **値付け**: スコア → Plackett-Luce → Isotonic 較正 → 市場ブレンド、と市場の見方。
+   数値がどこで動いたかが、最終値そのものより情報量が多い。
+3. **根拠**: LightGBM の per-prediction 寄与 (`pred_contrib`)。**合計がスコアと厳密に一致する**ことを
+   テストで固定している。残差に何かが隠れている説明は説明ではない。
+   寄与が説明するのは**スコア**であって確率ではない。後段は出走馬全体をまとめて変形するため。
+
+```
+python src/live/explain.py archive --days 7   # live_data/explained/<date>.json と index.json
+python src/live/explain.py day --date <date>  # テキストで確認
 ```
 
 ## 5. Improvement Roadmap

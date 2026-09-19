@@ -88,6 +88,24 @@ def odds_breakdown(bets: pd.DataFrame) -> List[Dict]:
     return rows
 
 
+def forecast_block(archive_dir: Path, embed_days: int) -> Dict:
+    """The 予想 page's data: the day index, plus the most recent days in full.
+
+    Only a few days are embedded so the published page stays small; the local
+    API serves the rest, and the page falls back to it when a date is missing.
+    """
+    index_path = archive_dir / "index.json"
+    if not index_path.exists():
+        return {}
+    index = (json.loads(index_path.read_text(encoding="utf-8")) or {}).get("days", [])
+    days = {}
+    for row in index[:max(0, embed_days)]:
+        path = archive_dir / f"{row['date']}.json"
+        if path.exists():
+            days[row["date"]] = json.loads(path.read_text(encoding="utf-8"))
+    return {"index": index, "days": days, "embedded": sorted(days), "archive_dir": str(archive_dir)}
+
+
 def _data_note(meta: Dict) -> str:
     if meta.get("is_synthetic", True):
         return ("合成データによるデモです。実際のレース結果・オッズではありません。"
@@ -219,10 +237,13 @@ def model_block(metrics: Dict) -> Dict:
 @click.option("--model_dir", default="artifacts/", show_default=True)
 @click.option("--sweep_dir", default="backtest_results/sweep/", show_default=True)
 @click.option("--roadmap", "roadmap_path", default="docs/roadmap.yml", show_default=True)
+@click.option("--explained", "explained_dir", default="live_data/explained", show_default=True)
+@click.option("--embed_days", type=int, default=3, show_default=True,
+              help="how many explained race days to bake into the page")
 @click.option("--output", default="web/data.json", show_default=True)
 @click.option("--data_note", default=None, help="one line describing the data source shown on the dashboard")
-def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, output: str,
-         data_note: Optional[str]) -> None:
+def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, explained_dir: str, embed_days: int,
+         output: str, data_note: Optional[str]) -> None:
     bt, md, sw = Path(backtest_dir), Path(model_dir), Path(sweep_dir)
     summary = json.loads((bt / "summary.json").read_text()) if (bt / "summary.json").exists() else {}
     metrics = json.loads((md / "metrics.json").read_text()) if (md / "metrics.json").exists() else {}
@@ -276,15 +297,17 @@ def main(backtest_dir: str, model_dir: str, sweep_dir: str, roadmap_path: str, o
         "sweep": {"grid": sweep_rows(grid), "summary": sweep_summary},
         "ablation": ablation_rows(ablation),
         "target_plan": target_plan,
+        "forecast": forecast_block(Path(explained_dir), embed_days),
         "roadmap": load_roadmap(Path(roadmap_path)),
     }
 
     out = Path(output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
-    log.info("wrote %s (%.1f KB) | equity %d pts | sweep %d pts | bets %d | roadmap %d tasks",
+    log.info("wrote %s (%.1f KB) | equity %d pts | sweep %d pts | bets %d | roadmap %d tasks | 予想 %d/%d 日",
              out, out.stat().st_size / 1024, len(payload["equity"]), len(payload["sweep"]["grid"]), len(bets),
-             len(payload["roadmap"].get("tasks", [])))
+             len(payload["roadmap"].get("tasks", [])), len(payload["forecast"].get("embedded", [])),
+             len(payload["forecast"].get("index", [])))
 
 
 if __name__ == "__main__":
