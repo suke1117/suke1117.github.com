@@ -32,7 +32,8 @@ web/           静的ダッシュボード (index.html + data.json)。ハンバ�
 live_data/     当日の出走表・オッズ・結果・台帳、説明付きレース日 explained/ (git 管理外)
 docs/roadmap.yml  優先度つき改善タスク (ダッシュボードに表示される)
 tests/         pytest (リーク検査・確率整合性・Kelly 制約を含む)
-raw_data/      JRA-VAN CSV エクスポート置き場 (git 管理外)
+raw_data/      実データの CSV 置き場 (git 管理外)。列名が違う場合は mapping.yml を同梱する
+docs/data_sources.md  実データの入手ルート比較と、必須列が欠けたときに失われるもの
 processed/     前処理済み特徴量 (git 管理外)
 artifacts/     学習済みモデル・較正器 (git 管理外)
 ```
@@ -90,6 +91,9 @@ artifacts/     学習済みモデル・較正器 (git 管理外)
   - レーステーブル、馬情報テーブルの結合と、過去成績に基づく時系列特徴量の生成。
   - Test Command: `python src/data/preprocess.py --input raw_data/ --output processed/`
   - (raw_data/ が空の場合は合成データを自動生成する。明示的には `--synthetic`)
+  - 実データの投入前に `python src/data/preprocess.py --check --input raw_data/` で過不足を確認する。
+    列名が JV-Data 形式でなくても `raw_data/mapping.yml` で対応づければコードは触らなくてよい。
+    入手ルートの比較は `docs/data_sources.md`。
 - **Phase 2: LightGBM Ranking Model & Calibration**
   - LambdaMARTモデルの訓練と、Isotonic Regressionによる確率較正モジュールの実装。
   - Test Command: `python src/models/train_lgbm.py --data processed/train.csv --model_dir artifacts/`

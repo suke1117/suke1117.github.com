@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -31,6 +32,71 @@ from src.data.features import (  # noqa: E402
 from src.data.sources import CombinedSource, JRAVanCSVSource, SyntheticSource  # noqa: E402
 
 log = get_logger("preprocess")
+
+
+def report_input(input_dir: str) -> bool:
+    """Print what a directory of CSVs would give the pipeline. True if usable.
+
+    Every real-data route ends at the same question - "does this file have what
+    the model needs?" - and answering it by running the whole import and reading
+    a traceback is a bad loop. This answers it from the headers alone, and
+    prints the mapping.yml lines that would close the gap.
+    """
+    from src.data.sources.jravan_csv import MAPPING_FILE, diagnose
+
+    try:
+        rep = diagnose(input_dir)
+    except Exception as exc:  # a broken mapping.yml or an unreadable CSV
+        click.echo(f"{input_dir} を読めませんでした: {exc}")
+        return False
+
+    click.echo("=" * 78)
+    click.echo(f"{input_dir} を検査しました" +
+               (f"  (設定: {rep['mapping_file']})" if rep["mapping_file"] else ""))
+    click.echo("-" * 78)
+    fixes: Dict[str, List[str]] = {}
+    for table, info in rep["tables"].items():
+        ja = "レース" if table == "races" else "出走馬"
+        if info.get("error"):
+            click.echo(f"{ja:<6}: {info['error']}")
+            continue
+        click.echo(f"{ja:<6}: {Path(info['path']).name}  {info['n_rows']:,} 行")
+        click.echo(f"        認識できた列: {', '.join(info['mapped']) or 'なし'}")
+        if info["missing_required"]:
+            click.echo(f"        ★足りない必須列: {', '.join(info['missing_required'])}")
+            fixes[table] = info["missing_required"]
+        if info["missing_optional"]:
+            click.echo(f"        無くても動く列: {', '.join(info['missing_optional'])}")
+        if info["unmapped_columns"]:
+            shown = info["unmapped_columns"][:14]
+            more = "" if len(info["unmapped_columns"]) <= 14 else f" ほか{len(info['unmapped_columns']) - 14}列"
+            click.echo(f"        使われていない列: {', '.join(shown)}{more}")
+    click.echo("-" * 78)
+    if all(info.get("error") for info in rep["tables"].values()):
+        click.echo("CSV が 1 つも見つかりません。レース単位のファイルと出走馬単位のファイルを "
+                   f"{input_dir} に置いてください。")
+        click.echo(f"ファイル名が RA*/SE* でない場合は {Path(input_dir) / MAPPING_FILE} に:")
+        click.echo("")
+        click.echo("  files:")
+        click.echo('    races: "*race*.csv"')
+        click.echo('    entries: "*result*.csv"')
+        return False
+    if rep["usable"]:
+        click.echo("このデータで学習まで通ります:")
+        click.echo(f"  python src/data/preprocess.py --input {input_dir} --output processed/")
+        return True
+    if fixes:
+        click.echo(f"足りない列が、上の「使われていない列」の中に別名で入っていませんか。"
+                   f"入っていれば {Path(input_dir) / MAPPING_FILE} に対応を書けばコードは触らずに通ります:")
+        click.echo("")
+        for table, cols in fixes.items():
+            click.echo(f"  {table}:")
+            for c in cols:
+                click.echo(f"    <その列の見出し>: {c}")
+        click.echo("")
+        click.echo("見出しが本当に存在しない場合、その列はこのデータでは取れません。"
+                   "必須列が 1 つでも欠けると as-of 特徴量か精算のどちらかが作れなくなります。")
+    return False
 
 
 def _is_synthetic(source) -> bool:
@@ -54,8 +120,12 @@ def _is_synthetic(source) -> bool:
               help="synthetic only: how much the crowd relies on past form (0..1)")
 @click.option("--include_nar/--jra_only", default=False, show_default=True,
               help="synthetic only: also generate 地方競馬 (weekday racing), which multiplies the bets per week")
+@click.option("--check", is_flag=True,
+              help="inspect --input and report what maps, what is missing, and the mapping.yml that would fix it")
 def main(input_dir: str, output_dir: str, synthetic: bool, start: str, end: str, seed: int, public_noise: float,
-         public_form_weight: float, include_nar: bool) -> None:
+         public_form_weight: float, include_nar: bool, check: bool) -> None:
+    if check:
+        raise SystemExit(0 if report_input(input_dir) else 1)
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 

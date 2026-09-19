@@ -143,17 +143,28 @@ tasks:
     category: data
     priority: P0
     effort: L
-    status: blocked
-    blocked_by: JRA-VAN Data Lab. の契約と、JV-Link を動かす Windows 環境
+    status: todo
+    blocked_by: ""
     impact: 全指標
     why: >-
       現在の数値はすべて合成データ。合成の潜在構造は特徴量が復元できるように作ってあるため、
       エッジの大きさ自体に意味はない。実データでの較正誤差・回収率・ドローダウンだけが基準線になる。
       特徴量を増やす作業は、実データが入ってからでないと効果を測れない。
     done: >-
-      JRA-VAN の CSV で Phase 1〜4b が通り、合成データとの差分 (的中率、較正誤差、回収率) が
+      実データの CSV で Phase 1〜4b が通り、合成データとの差分 (的中率、較正誤差、回収率の 95% 区間) が
       docs に記録される。
-    files: [raw_data/, src/data/sources/jravan_csv.py]
+    result: >-
+      取り込み側の準備は完了。ルートを調べ直した結果、当初の想定 (JRA-VAN の契約と Windows 環境が要る) は
+      前提として狭すぎた。地方競馬情報サイト (keiba.go.jp) が公式に CSV を無料配布しており、
+      費用も Windows も契約も要らない。地方は平日開催なので週あたりの購入点数が JRA の 3 倍以上になり、
+      週次リターンの分解上はこちらの方が効く可能性が高い。調査結果は docs/data_sources.md。
+      あわせて、列名が JV-Data 形式でなくても raw_data/mapping.yml で通るようにし、
+      ヘッダだけを見て過不足を報告する `preprocess.py --check` を追加した。
+      データ源が使えるかの判定が 1 コマンドで済む。作業中に、任意列が単に存在しない CSV で
+      パーサが落ちるバグが見つかった (df.get が None を返し、pd.to_numeric がスカラーにする)。
+      JV-Data 以外の出力では欠けている方が普通なので、これは例外ではなく通常経路だった。
+      残りは実データの入手そのもの。
+    files: [raw_data/, src/data/sources/jravan_csv.py, src/data/preprocess.py, docs/data_sources.md]
 
   - id: P1x
     title: 予想ページを当日のカードに接続する
