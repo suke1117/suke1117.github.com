@@ -134,3 +134,122 @@ def test_an_empty_directory_is_reported_rather_than_crashed(tmp_path):
     rep = diagnose(str(tmp_path))
     assert rep["usable"] is False
     assert all(t.get("error") for t in rep["tables"].values())
+
+
+# --------------------------------------------------------------------------
+# sources with no key and no ids of their own (地方競馬の月次 CSV がこの形)
+# --------------------------------------------------------------------------
+NAR_RACES = pd.DataFrame({
+    "競走年月日": ["20240703", "20240703"],
+    "競馬場": ["大井", "大井"],
+    "レース番号": [1, 2],
+    "距離": [1500, 1600],
+    "芝ダート区分": ["ダ", "ダ"],
+    "馬場": ["良", "重"],
+    "競走種類名称": ["C3", "C2"],
+})
+NAR_ENTRIES = pd.DataFrame({
+    "競走年月日": ["20240703"] * 4,
+    "競馬場": ["大井"] * 4,
+    "レース番号": [1, 1, 2, 2],
+    "枠番": [1, 2, 1, 2], "馬番": [1, 2, 1, 2],
+    "馬名": ["ウマA", "ウマB", "ウマA", "ウマC"],
+    "騎手名": ["騎手X", "騎手Y", "騎手X", "騎手Z"],
+    "調教師名": ["厩舎P", "厩舎Q", "厩舎P", "厩舎R"],
+    "性別": ["牡", "牝", "牡", "セ"], "年齢": [4, 3, 4, 5],
+    "負担重量": [56.0, 54.0, 56.0, 55.0],
+    "着順": [1, 2, 2, 1], "単勝オッズ": [2.4, 5.1, 3.3, 1.9],
+})
+NAR_MAPPING = """
+files:
+  races: "*racelist*.csv"
+  entries: "*horselist*.csv"
+derive:
+  race_id: [競馬場, 競走年月日, レース番号]
+races:
+  競走年月日: race_date
+  競馬場: venue
+  レース番号: race_no
+  距離: distance_m
+  芝ダート区分: surface
+  馬場: going
+  競走種類名称: race_class
+entries:
+  馬名: [entrant_id, entrant_name]
+  騎手名: [jockey_id, jockey_name]
+  調教師名: trainer_id
+  枠番: draw
+  馬番: post_position
+  性別: sex
+  年齢: age
+  負担重量: weight_carried
+  着順: finish_position
+  単勝オッズ: win_odds
+"""
+
+
+@pytest.fixture
+def nar_csv(tmp_path):
+    NAR_RACES.to_csv(tmp_path / "202407_racelist.csv", index=False, encoding="cp932")
+    NAR_ENTRIES.to_csv(tmp_path / "202407_horselist.csv", index=False, encoding="cp932")
+    (tmp_path / "mapping.yml").write_text(NAR_MAPPING, encoding="utf-8")
+    return tmp_path
+
+
+def test_a_race_key_can_be_composed_when_the_file_has_none(nar_csv):
+    """The 地方競馬 monthly CSVs carry no race_id; it is 場+日+R or nothing."""
+    races, entries = JRAVanCSVSource(str(nar_csv)).load()
+    assert list(races["race_id"]) == ["大井-20240703-1", "大井-20240703-2"]
+    assert set(entries["race_id"]) == set(races["race_id"])
+    assert diagnose(str(nar_csv))["usable"] is True
+
+
+def test_the_field_size_is_counted_when_the_file_does_not_state_it(nar_csv):
+    races, _ = JRAVanCSVSource(str(nar_csv)).load()
+    assert list(races["n_runners"]) == [2, 2]
+
+
+def test_one_column_can_feed_two_canonical_ones(nar_csv):
+    """馬名 is both the only id available and the display name.
+
+    Writing the same YAML key twice keeps the last one silently, so the
+    mapping takes a list instead.
+    """
+    _, entries = JRAVanCSVSource(str(nar_csv)).load()
+    assert list(entries["entrant_id"]) == ["ウマA", "ウマB", "ウマA", "ウマC"]
+    assert list(entries["entrant_name"]) == ["ウマA", "ウマB", "ウマA", "ウマC"]
+    assert list(entries["jockey_name"]) == ["騎手X", "騎手Y", "騎手X", "騎手Z"]
+
+
+def test_using_a_name_as_an_id_is_reported_as_a_hazard(nar_csv):
+    """改名 splits one horse in two; 同名馬 merges two into one.
+
+    Both corrupt every as-of aggregate, and neither shows up as an error, so
+    the check has to say it out loud.
+    """
+    warn = " ".join(diagnose(str(nar_csv))["tables"]["entries"]["warnings"])
+    assert "entrant_id" in warn and "馬名" in warn
+    assert "jockey_id" in warn
+
+
+def test_mapping_a_runners_own_past_record_is_reported_as_a_leak(nar_csv):
+    """出馬表 carries 全成績/当競馬場成績 etc. whose as-of timing is unstated.
+
+    If they include the race in hand, using one is a leak that looks perfectly
+    reasonable in the data.
+    """
+    e = NAR_ENTRIES.assign(全成績=["12-3-2-5"] * 4, 当競馬場成績=["4-1-0-2"] * 4)
+    e.to_csv(nar_csv / "202407_horselist.csv", index=False, encoding="cp932")
+    (nar_csv / "mapping.yml").write_text(
+        NAR_MAPPING + "  全成績: ent_win_rate\n", encoding="utf-8")
+    warn = " ".join(diagnose(str(nar_csv))["tables"]["entries"]["warnings"])
+    assert "全成績" in warn and "リーク" in warn
+
+
+def test_a_key_that_cannot_be_composed_is_reported_not_crashed(nar_csv):
+    (nar_csv / "mapping.yml").write_text(
+        NAR_MAPPING.replace("[競馬場, 競走年月日, レース番号]", "[開催場, 競走年月日]"),
+        encoding="utf-8")
+    rep = diagnose(str(nar_csv))
+    assert rep["usable"] is False
+    assert "開催場" in str(rep["tables"]["races"].get("error", ""))

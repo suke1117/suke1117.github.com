@@ -67,6 +67,8 @@ def report_input(input_dir: str) -> bool:
             fixes[table] = info["missing_required"]
         if info["missing_optional"]:
             click.echo(f"        無くても動く列: {', '.join(info['missing_optional'])}")
+        for w in info.get("warnings", []):
+            click.echo(f"        ⚠ {w}")
         if info["unmapped_columns"]:
             shown = info["unmapped_columns"][:14]
             more = "" if len(info["unmapped_columns"]) <= 14 else f" ほか{len(info['unmapped_columns']) - 14}列"

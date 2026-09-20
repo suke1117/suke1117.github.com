@@ -1,0 +1,75 @@
+# 地方競馬情報サイト (keiba.go.jp) の月次 ZIP 用の対応表。
+#
+#   raw_data/mapping.yml にコピーして使う。
+#   レース情報 ZIP: .../DataDownload/RaceDataDownload?type=monthly&k_year=YYYY&k_month=M
+#     → {YYYYMM}_racelist.csv / {YYYYMM}_horselist.csv / {YYYYMM}_payback.csv
+#   オッズ ZIP:     .../DataDownload/OddsDataDownload
+#   文字コードは CP932 (loader が自動判定する)
+#
+# ★列名は実ファイルで確認していない。公開実装が 2026年7月時点の中身として
+#   記述していたものを写しただけ。必ず
+#     python src/data/preprocess.py --check --input raw_data/
+#   で答え合わせすること。違っていれば「使われていない列」に本当の見出しが出る。
+#
+# この形のファイル (race_id が無い / 馬IDが無い / 頭数の列が無い) で
+# Phase 1〜2 が通ることは、同じ構造のダミーで実測済み。
+
+files:
+  races: "*racelist*.csv"
+  entries: "*horselist*.csv"
+
+# race_id という列は存在しない。競馬場 + 競走年月日 + レース番号 で作る。
+derive:
+  race_id: [競馬場, 競走年月日, レース番号]
+
+races:
+  競走年月日: race_date
+  競馬場: venue
+  レース番号: race_no
+  距離: distance_m
+  芝ダート区分: surface     # 「トラック種別」ではない
+  馬場: going               # 「馬場状態」ではない
+  競走種類名称: race_class
+  # 頭数の列は無い。出馬表の行数から数えるので書かなくてよい。
+
+entries:
+  # 馬IDが無いので、馬名を ID と表示名の両方に使う。
+  # YAML で同じキーを二度書くと後勝ちで片方が消えるため、リストで書く。
+  馬名: [entrant_id, entrant_name]
+  騎手名: [jockey_id, jockey_name]
+  調教師名: trainer_id
+  枠番: draw
+  馬番: post_position
+  性別: sex
+  年齢: age
+  負担重量: weight_carried
+  馬体重: body_weight
+  馬体重増減: body_weight_diff
+  着順: finish_position
+  単勝オッズ: win_odds      # 実際は別 ZIP。結合してから読ませる
+
+values:
+  surface: {"芝": turf, "ダ": dirt, "ダート": dirt}
+  going: {"良": good, "稍": yielding, "稍重": yielding, "重": soft, "不良": heavy}
+
+# ---------------------------------------------------------------------------
+# 分かっている問題が 2 つある。どちらも --check が警告する。
+#
+# 1. 馬ID・騎手IDが無い。名前しかない。
+#    as-of 集計はすべて主体のIDで束ねるので、名前を代用することになる。
+#    地方競馬には改名と同名馬が実在するため、名前をキーにすると
+#    「別の馬を同じ馬として集計する」と「同じ馬を別の馬として分断する」が両方起きる。
+#    より正確にやるなら (馬名 + 生年月日 + 父馬名) のハッシュを代理キーにして
+#    改名を名寄せする必要がある。この品質が過去成績特徴量の精度を直接決めるので、
+#    実データが入ったら必ず検証すること。
+#
+# 2. horselist にはレース後の列が混ざっている。
+#    着順・タイム・着差・上がり3F・人気 は明らかにレース後。
+#    さらに 騎手成績・全成績・ダート左成績・ダート右成績・当競馬場成績・
+#    うち当距離成績・最高タイム・最高タイム良馬場 の 8 列は、
+#    「いつ時点の集計か」が公開仕様から読み取れない。
+#    当該レースを含んでいればリークになる。**これらは対応づけない。**
+#    このシステムは過去成績を履歴から自分で as-of 集計するので、元から不要である。
+#    着順だけは学習ラベルとして必要なので対応づけるが、特徴量には入らない
+#    (FORBIDDEN_FEATURE_COLUMNS が弾く)。
+# ---------------------------------------------------------------------------

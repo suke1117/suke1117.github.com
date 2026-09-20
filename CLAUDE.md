@@ -93,7 +93,15 @@ artifacts/     学習済みモデル・較正器 (git 管理外)
   - (raw_data/ が空の場合は合成データを自動生成する。明示的には `--synthetic`)
   - 実データの投入前に `python src/data/preprocess.py --check --input raw_data/` で過不足を確認する。
     列名が JV-Data 形式でなくても `raw_data/mapping.yml` で対応づければコードは触らなくてよい。
-    入手ルートの比較は `docs/data_sources.md`。
+    `derive:` で列を連結してキーを作れる (race_id が無いファイル用)。1 列を複数の役割に割り当てるには
+    リストで書く (`馬名: [entrant_id, entrant_name]`)。頭数の列が無ければ出走表の行数から数える。
+    入手ルートの比較は `docs/data_sources.md`、地方競馬向けの雛形は `docs/mapping.nar.example.yml`。
+  - **主体の累積成績列 (全成績・当競馬場成績など) を対応づけてはならない**。「いつ時点か」が
+    ファイルから判別できず、当該レースを含んでいればリークになる。過去成績は履歴から自分で
+    as-of 集計するので元から不要。`--check` が警告する。
+  - ID の無いデータ源で名前を `entrant_id` / `jockey_id` に代用すると、改名で同一主体が分断され、
+    同名で別主体が合算される。`--check` が警告するが、警告で消える問題ではない。
+    as-of 集計の精度を直接決めるので、実データ投入時に必ず検証すること。
 - **Phase 2: LightGBM Ranking Model & Calibration**
   - LambdaMARTモデルの訓練と、Isotonic Regressionによる確率較正モジュールの実装。
   - Test Command: `python src/models/train_lgbm.py --data processed/train.csv --model_dir artifacts/`

@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import glob
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -89,7 +89,8 @@ DEFAULT_VALUE_MAPS: Dict[str, Dict[str, str]] = {
 REQUIRED: Dict[str, Dict[str, Tuple[str, ...]]] = {
     "races": {"race_id": (), "race_date": ("_year", "_monthday"), "venue": (), "race_no": (),
               "distance_m": (), "surface": ("_track_cd",), "going": ("_siba_baba", "_dirt_baba"),
-              "race_class": (), "n_runners": ("_syusso",)},
+              # n_runners is counted from the card when the file has no such column
+              "race_class": (), "n_runners": ("_syusso", "__counted__")},
     "entries": {"race_id": (), "entrant_id": (), "post_position": (), "draw": (), "jockey_id": (),
                 "trainer_id": (), "age": (), "sex": (), "weight_carried": (), "finish_position": (),
                 "win_odds": ()},
@@ -136,9 +137,46 @@ def _num(df: pd.DataFrame, col: str) -> pd.Series:
     return pd.to_numeric(df[col], errors="coerce")
 
 
-def _rename(df: pd.DataFrame, mapping: Dict[str, str]) -> pd.DataFrame:
-    cols = {c: mapping[c] for c in df.columns if c in mapping}
-    return df.rename(columns=cols)
+def _targets(mapping: Dict[str, object], col: str) -> List[str]:
+    """A source column may feed several canonical ones.
+
+    地方競馬の出馬表には馬IDが無く馬名しかないので、同じ列を entrant_id と
+    entrant_name の両方に使うことになる。YAML で同じキーを二度書くと後勝ちで
+    黙って片方が消えるため、リストで書けるようにしてある。
+    """
+    v = mapping.get(col)
+    if v is None:
+        return []
+    return [str(x) for x in v] if isinstance(v, (list, tuple)) else [str(v)]
+
+
+def _apply_columns(df: pd.DataFrame, mapping: Dict[str, object],
+                   derive: Optional[Dict[str, object]] = None) -> pd.DataFrame:
+    """Rename into canonical columns, then build the ones that are composed.
+
+    Unmapped columns are kept, because the JV-Data parser reads raw fields
+    (``_year``, ``_track_cd``) that no mapping names.
+    """
+    out = df.copy()
+    for src in df.columns:
+        for dst in _targets(mapping, src):
+            if dst != src:
+                out[dst] = df[src]
+    for dst, parts in (derive or {}).items():
+        parts = [parts] if isinstance(parts, str) else list(parts)
+        missing = [c for c in parts if c not in out.columns and c not in df.columns]
+        if missing:
+            raise ValueError(f"cannot derive {dst}: no column {missing}")
+        pieces = [(out[c] if c in out.columns else df[c]).astype(str).str.strip() for c in parts]
+        joined = pieces[0]
+        for piece in pieces[1:]:
+            joined = joined + "-" + piece
+        out[dst] = joined
+    return out
+
+
+def _rename(df: pd.DataFrame, mapping: Dict[str, object]) -> pd.DataFrame:
+    return _apply_columns(df, mapping)
 
 
 MAPPING_FILE = "mapping.yml"
@@ -155,18 +193,27 @@ def load_mapping(input_dir: str) -> Dict:
         cfg = yaml.safe_load(fh) or {}
     if not isinstance(cfg, dict):
         raise ValueError(f"{path} must be a mapping of sections, got {type(cfg).__name__}")
-    unknown = set(cfg) - {"files", "races", "entries", "values"}
+    unknown = set(cfg) - {"files", "races", "entries", "values", "derive"}
     if unknown:
         raise ValueError(f"{path} has unknown sections {sorted(unknown)}; "
-                         "expected files / races / entries / values")
+                         "expected files / races / entries / values / derive")
     return cfg
 
 
-def _column_map(cfg: Dict, table: str) -> Dict[str, str]:
+def _column_map(cfg: Dict, table: str) -> Dict[str, object]:
     """Built-in JV-Data names, with the user's own file taking precedence."""
-    base = dict(RA_MAP if table == "races" else SE_MAP)
-    base.update({str(k): str(v) for k, v in (cfg.get(table) or {}).items()})
+    base: Dict[str, object] = dict(RA_MAP if table == "races" else SE_MAP)
+    base.update({str(k): v for k, v in (cfg.get(table) or {}).items()})
     return base
+
+
+def _derive_map(cfg: Dict) -> Dict[str, object]:
+    """Columns built by joining others, for sources with no key of their own.
+
+    地方競馬のファイルには race_id が無い。競馬場・競走年月日・レース番号を
+    つないで作るしかなく、それは対応表では書けない。
+    """
+    return {str(k): v for k, v in (cfg.get("derive") or {}).items()}
 
 
 def _locate(cfg: Dict, table: str, input_dir: str) -> Optional[str]:
@@ -206,23 +253,66 @@ def diagnose(input_dir: str) -> Dict:
             continue
         df = _read_csv(path)
         colmap = _column_map(cfg, table)
-        renamed = set(_rename(df.head(0), colmap).columns)
+        derive = _derive_map(cfg)
+        try:
+            renamed = set(_apply_columns(df.head(0), colmap, derive).columns)
+        except ValueError as exc:
+            info["error"] = str(exc)
+            report["usable"] = False
+            report["tables"][table] = info
+            continue
         info["n_rows"] = len(df)
         info["mapped"] = sorted(c for c in renamed if c in REQUIRED[table] or c in OPTIONAL[table])
         missing = []
         for col, alts in REQUIRED[table].items():
             if col in renamed:
                 continue
+            if "__counted__" in alts:
+                continue  # counted from the entries themselves
             if alts and all(a in renamed for a in alts):
                 continue  # the parser derives it from the raw JV-Data fields
             missing.append(col)
         info["missing_required"] = missing
         info["missing_optional"] = [c for c in OPTIONAL[table] if c not in renamed]
-        info["unmapped_columns"] = [c for c in df.columns if c not in colmap]
+        info["unmapped_columns"] = [c for c in df.columns if not _targets(colmap, c)]
+        info["warnings"] = _warnings(cfg, table, renamed)
         if missing:
             report["usable"] = False
         report["tables"][table] = info
     return report
+
+
+#: Column headers that hold a runner's own past record. Sources differ on
+#: whether these are as-of the race or include it, and the difference is
+#: invisible in the file. Mapping one into a feature would be a leak that no
+#: test catches, because the value looks reasonable either way.
+SUSPECT_ASOF_HEADERS = ("成績", "通算", "最高タイム", "勝率", "連対率", "複勝率")
+
+
+def _warnings(cfg: Dict, table: str, renamed: set) -> List[str]:
+    """Hazards that are not missing columns but will still produce wrong numbers."""
+    out: List[str] = []
+    user = {str(k): v for k, v in (cfg.get(table) or {}).items()}
+    if table == "entries":
+        # A name is not an id: 改名 splits one horse in two, and 同名馬 merges
+        # two into one. Both corrupt every as-of aggregate keyed on the id.
+        by_target: Dict[str, List[str]] = {}
+        for src in user:
+            for dst in _targets(user, src):
+                by_target.setdefault(dst, []).append(src)
+        for id_col, name_col in (("entrant_id", "entrant_name"), ("jockey_id", "jockey_name")):
+            shared = set(by_target.get(id_col, [])) & set(by_target.get(name_col, []))
+            if shared:
+                out.append(f"{id_col} に名前の列 ({', '.join(sorted(shared))}) を割り当てています。"
+                           "改名で同一の主体が分断され、同名で別の主体が合算されます。"
+                           "過去成績の集計はすべてこのキーで束ねるので、精度に直接効きます。")
+    leaky = sorted({src for src in user if any(h in str(src) for h in SUSPECT_ASOF_HEADERS)})
+    if leaky:
+        out.append(f"{', '.join(leaky)} を対応づけています。これらは主体の過去成績で、"
+                   "当該レースを含むかどうかがファイルから判別できません。"
+                   "含んでいればリークです。過去成績は履歴から自分で as-of 集計するので、"
+                   "対応づけないでください。")
+    return out
 
 
 class JRAVanCSVSource(DataSource):
@@ -245,9 +335,18 @@ class JRAVanCSVSource(DataSource):
                 f"race / entry CSVs not found in {self.input_dir}. Name them RA*.csv and SE*.csv, "
                 f"or point at them from {self.input_dir}/{MAPPING_FILE}. "
                 "`python src/data/preprocess.py --check` says what is missing.")
-        values = _value_maps(cfg)
-        races = self._parse_races(_rename(_read_csv(ra_path), _column_map(cfg, "races")), values)
-        entries = self._parse_entries(_rename(_read_csv(se_path), _column_map(cfg, "entries")))
+        values, derive = _value_maps(cfg), _derive_map(cfg)
+        races = self._parse_races(
+            _apply_columns(_read_csv(ra_path), _column_map(cfg, "races"), derive), values)
+        entries = self._parse_entries(
+            _apply_columns(_read_csv(se_path), _column_map(cfg, "entries"), derive))
+        # A source with no field count of its own: count the card instead of
+        # asking the file for a number it does not carry.
+        if "n_runners" not in races.columns or races["n_runners"].le(0).all():
+            counts = entries.groupby("race_id").size().rename("n_runners")
+            races = races.drop(columns=["n_runners"], errors="ignore").merge(
+                counts, left_on="race_id", right_index=True, how="left")
+            races["n_runners"] = races["n_runners"].fillna(0).astype(int)
         return races, entries
 
     # -- parsing -----------------------------------------------------------
@@ -279,6 +378,8 @@ class JRAVanCSVSource(DataSource):
         out["race_class"] = df["race_class"].astype(str)
         if "n_runners" in df:
             out["n_runners"] = pd.to_numeric(df["n_runners"], errors="coerce").fillna(0).astype(int)
+        elif "_syusso" not in df:
+            out["n_runners"] = 0   # filled by counting the card in load()
         else:
             out["n_runners"] = pd.to_numeric(df["_syusso"], errors="coerce").fillna(0).astype(int)
         if "organizer" in df:
