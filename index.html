@@ -1,9 +1,119 @@
-<html>
- 
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>筋トレメニュー ジェネレーター｜悩みを書くだけで自分用のジムメニュー</title>
+<meta name="description" content="いまの悩みを書くだけで、ジムで今日からやる筋トレメニューを自動で組み立てます。週の回数・時間・器具・痛みのある部位に合わせて、種目とセット数まで具体的に提案します。">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="筋トレメニュー ジェネレーター">
+<meta property="og:description" content="悩みを書くだけで、あなた専用のジムメニューを自動生成します。">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
+<link rel="stylesheet" href="assets/style.css">
+</head>
 <body>
-  <h1>YOUR NAME</h1>
-  <p>Welcome to my website!</p>
-  <img src="https://content.codecademy.com/articles/github-pages-via-web-app/happy-ice-cream.gif" />
+
+<div class="wrap">
+
+  <header class="hero">
+    <span class="logo">💪 WORKOUT MENU GENERATOR</span>
+    <h1>悩みを書くだけで、<br>今日のジムメニューが決まる。</h1>
+    <p class="lead">
+      「お腹を引っ込めたい」「肩こりがつらい」「何をすればいいか分からない」——
+      その一文から、種目・セット数・休憩時間まで入った1週間のプランを組み立てます。
+    </p>
+  </header>
+
+  <form id="form" novalidate>
+
+    <section class="card" id="form-card">
+      <h2>1. いまの悩みを教えてください</h2>
+      <p class="hint">文章でそのまま書いてください。キーワードを読み取ってメニューに反映します。</p>
+
+      <div class="field">
+        <label class="lbl" for="concern">悩み・なりたい姿（自由記述）</label>
+        <textarea id="concern" placeholder="例）デスクワークで肩こりがひどい。お腹も出てきたので引き締めたいけど、腰が弱いのでキツい種目は不安です。"></textarea>
+      </div>
+
+      <div class="field">
+        <label class="lbl">当てはまるものを選ぶ（複数可・任意）</label>
+        <div class="chips" id="preset-chips"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. トレーニングできる条件</h2>
+      <p class="hint">無理のない範囲で。続けられる回数を選ぶのがいちばん効果的です。</p>
+
+      <div class="grid2">
+        <div class="field">
+          <label class="lbl">トレーニング歴</label>
+          <div class="seg">
+            <label><input type="radio" name="level" value="1" checked>初心者</label>
+            <label><input type="radio" name="level" value="2">半年〜2年</label>
+            <label><input type="radio" name="level" value="3">2年以上</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl">週に通える回数</label>
+          <div class="seg">
+            <label><input type="radio" name="freq" value="1">週1</label>
+            <label><input type="radio" name="freq" value="2">週2</label>
+            <label><input type="radio" name="freq" value="3" checked>週3</label>
+            <label><input type="radio" name="freq" value="4">週4</label>
+            <label><input type="radio" name="freq" value="5">週5</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl">1回にかけられる時間</label>
+          <div class="seg">
+            <label><input type="radio" name="mins" value="30">30分</label>
+            <label><input type="radio" name="mins" value="45">45分</label>
+            <label><input type="radio" name="mins" value="60" checked>60分</label>
+            <label><input type="radio" name="mins" value="90">90分</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl">使える器具</label>
+          <div class="seg">
+            <label><input type="radio" name="env" value="full" checked>フルジム</label>
+            <label><input type="radio" name="env" value="machine">マシン中心</label>
+            <label><input type="radio" name="env" value="dumbbell">ダンベル</label>
+            <label><input type="radio" name="env" value="body">自重のみ</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="lbl">痛み・不安のある部位（あれば選択）</label>
+        <p class="sub">選んだ部位に負担の大きい種目は、メニューから自動で除外します。</p>
+        <div class="chips">
+          <label class="chip"><input type="checkbox" name="pain" value="lowback">腰</label>
+          <label class="chip"><input type="checkbox" name="pain" value="knee">膝</label>
+          <label class="chip"><input type="checkbox" name="pain" value="shoulder">肩</label>
+        </div>
+      </div>
+    </section>
+
+    <button class="btn btn-primary" id="gen" type="submit">メニューを作る</button>
+  </form>
+
+  <div id="result" hidden></div>
+
+  <footer>
+    入力内容はブラウザの中だけで処理され、どこにも送信されません。<br>
+    一般的な運動情報であり、診断・治療に代わるものではありません。
+  </footer>
+
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="assets/data.js"></script>
+<script src="assets/app.js"></script>
 </body>
- 
 </html>
