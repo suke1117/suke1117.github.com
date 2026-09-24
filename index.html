@@ -1,50 +1,98 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="auto">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>筋トレメニュー ジェネレーター｜悩みを書くだけで自分用のジムメニュー</title>
 <meta name="description" content="いまの悩みを書くだけで、ジムで今日からやる筋トレメニューを自動で組み立てます。週の回数・時間・器具・痛みのある部位に合わせて、種目とセット数まで具体的に提案します。">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#cdfa4b">
 <meta property="og:title" content="筋トレメニュー ジェネレーター">
 <meta property="og:description" content="悩みを書くだけで、あなた専用のジムメニューを自動生成します。">
 <meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23cdfa4b'/><text x='50' y='50' font-size='58' text-anchor='middle' dominant-baseline='central'>💪</text></svg>">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 
 <div class="wrap">
 
+  <div class="topbar" id="topbar">
+    <div class="brand"><span class="mark">💪</span>Workout Menu Generator</div>
+    <div class="theme-toggle" role="group" aria-label="テーマ">
+      <button type="button" data-theme-set="light" aria-pressed="false" title="ライト">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/></svg>
+      </button>
+      <button type="button" data-theme-set="auto" aria-pressed="true" title="自動">
+        <svg viewBox="0 0 24 24"><rect x="2.8" y="4.5" width="18.4" height="13" rx="2.2"/><path d="M8.5 20.5h7"/></svg>
+      </button>
+      <button type="button" data-theme-set="dark" aria-pressed="false" title="ダーク">
+        <svg viewBox="0 0 24 24"><path d="M20.5 14.3A8.6 8.6 0 1 1 9.7 3.5a6.9 6.9 0 0 0 10.8 10.8Z"/></svg>
+      </button>
+    </div>
+  </div>
+
   <header class="hero">
-    <span class="logo">💪 WORKOUT MENU GENERATOR</span>
-    <h1>悩みを書くだけで、<br>今日のジムメニューが決まる。</h1>
+    <span class="eyebrow">あなたの悩みから組み立てる</span>
+    <h1>悩みを書くだけで、<br><span class="hl">ジムのメニュー</span>が決まる。</h1>
     <p class="lead">
-      「お腹を引っ込めたい」「肩こりがつらい」「何をすればいいか分からない」——
+      「お腹を引っ込めたい」「肩こりがつらい」「何をすればいいか分からない」。
       その一文から、種目・セット数・休憩時間まで入った1週間のプランを組み立てます。
     </p>
+    <div class="steps-row">
+      <span><b>1</b>悩みを書く</span>
+      <span><b>2</b>条件を選ぶ</span>
+      <span><b>3</b>メニュー完成</span>
+    </div>
   </header>
 
   <form id="form" novalidate>
 
     <section class="card" id="form-card">
-      <h2>1. いまの悩みを教えてください</h2>
-      <p class="hint">文章でそのまま書いてください。キーワードを読み取ってメニューに反映します。</p>
-
-      <div class="field">
-        <label class="lbl" for="concern">悩み・なりたい姿（自由記述）</label>
-        <textarea id="concern" placeholder="例）デスクワークで肩こりがひどい。お腹も出てきたので引き締めたいけど、腰が弱いのでキツい種目は不安です。"></textarea>
+      <div class="card-head">
+        <span class="n">1</span>
+        <div>
+          <h2>いまの悩みを教えてください</h2>
+          <p class="hint">文章でそのまま書いてOKです。書いた内容からキーワードを読み取ってメニューに反映します。</p>
+        </div>
       </div>
 
       <div class="field">
-        <label class="lbl">当てはまるものを選ぶ（複数可・任意）</label>
+        <label class="lbl" for="concern">悩み・なりたい姿</label>
+        <textarea id="concern" rows="4" aria-describedby="detect"
+          placeholder="例）デスクワークで肩こりがひどい。お腹も出てきたので引き締めたいけど、腰が弱いのでキツい種目は不安です。"></textarea>
+
+        <div class="ta-foot">
+          <div class="samples">
+            <b>例文：</b>
+            <button type="button" class="sample">お腹を引っ込めて体脂肪を落としたい</button>
+            <button type="button" class="sample">デスクワークで猫背と肩こりがつらい</button>
+            <button type="button" class="sample">胸板を厚くして体を大きくしたい</button>
+            <button type="button" class="sample">運動が続かない。何をすればいいか分からない</button>
+          </div>
+          <span class="counter" id="counter">0字</span>
+        </div>
+
+        <div class="detect" id="detect" aria-live="polite">
+          <span class="dt">読み取った目的</span>
+          <span class="empty">入力するとここに表示されます</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="lbl">当てはまるものを選ぶ<span class="opt">複数可・任意</span></label>
         <div class="chips" id="preset-chips"></div>
       </div>
     </section>
 
     <section class="card">
-      <h2>2. トレーニングできる条件</h2>
-      <p class="hint">無理のない範囲で。続けられる回数を選ぶのがいちばん効果的です。</p>
+      <div class="card-head">
+        <span class="n">2</span>
+        <div>
+          <h2>トレーニングできる条件</h2>
+          <p class="hint">無理のない範囲で。続けられる回数を選ぶのがいちばん効果的です。</p>
+        </div>
+      </div>
 
       <div class="grid2">
         <div class="field">
@@ -81,7 +129,7 @@
           <label class="lbl">使える器具</label>
           <div class="seg">
             <label><input type="radio" name="env" value="full" checked>フルジム</label>
-            <label><input type="radio" name="env" value="machine">マシン中心</label>
+            <label><input type="radio" name="env" value="machine">マシン</label>
             <label><input type="radio" name="env" value="dumbbell">ダンベル</label>
             <label><input type="radio" name="env" value="body">自重のみ</label>
           </div>
@@ -89,7 +137,7 @@
       </div>
 
       <div class="field">
-        <label class="lbl">痛み・不安のある部位（あれば選択）</label>
+        <label class="lbl">痛み・不安のある部位<span class="opt">あれば選択</span></label>
         <p class="sub">選んだ部位に負担の大きい種目は、メニューから自動で除外します。</p>
         <div class="chips">
           <label class="chip"><input type="checkbox" name="pain" value="lowback">腰</label>
@@ -99,7 +147,13 @@
       </div>
     </section>
 
-    <button class="btn btn-primary" id="gen" type="submit">メニューを作る</button>
+    <div class="cta">
+      <div class="cta-meta" id="cta-meta"></div>
+      <button class="btn btn-primary" id="gen" type="submit">
+        <svg viewBox="0 0 24 24"><path d="M13 2.5 4.5 13.5H11l-.6 8 8.6-11h-6.6l.6-8Z"/></svg>
+        メニューを作る
+      </button>
+    </div>
   </form>
 
   <div id="result" hidden></div>
@@ -112,6 +166,16 @@
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="timer" id="timer" role="timer" aria-live="off">
+  <div class="ring">
+    <svg viewBox="0 0 38 38"><circle class="t" cx="19" cy="19" r="16.2"/><circle class="p" id="timer-arc" cx="19" cy="19" r="16.2"/></svg>
+    <b id="timer-num">60</b>
+  </div>
+  <div class="lb"><b id="timer-name">休憩中</b><span id="timer-next"></span></div>
+  <button type="button" id="timer-add">+15秒</button>
+  <button type="button" id="timer-stop">終了</button>
+</div>
 
 <script src="assets/data.js"></script>
 <script src="assets/app.js"></script>

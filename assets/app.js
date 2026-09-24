@@ -15,7 +15,8 @@ function mulberry32(a) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-let rand = mulberry32(Date.now());
+let SEED = Date.now() >>> 0;      // このシードが同じなら、同じ入力から同じプランが出る
+let rand = mulberry32(SEED);
 
 const $  = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -123,31 +124,40 @@ function pickScheme(input, an) {
     desc:'まずは動作を体に覚えさせる時期。重量は毎週少しずつで十分です。' };
 }
 
-/* 種目ごとの負荷を文章にする */
-function doseFor(ex, scheme) {
-  if (ex.unit === 'time' || ex.dose) return ex.dose;
-  const isolation = ['arms_bi','arms_tri','shoulder_lat','rear_delt','accessory','core'].includes(ex.pattern);
+/* 種目ごとの負荷（セット数・回数・休憩）を決める */
+const ISOLATION = ['arms_bi', 'arms_tri', 'shoulder_lat', 'rear_delt', 'accessory', 'core'];
+
+function prescription(ex, scheme) {
+  if (ex.dose) {                                   // 負荷が固定されている種目
+    const m = /(\d+)\s*セット/.exec(ex.dose);
+    return { fixed:ex.dose, sets:m ? parseInt(m[1], 10) : 1, reps:'', rest:0 };
+  }
   let sets = scheme.sets, reps = scheme.reps, rest = scheme.rest;
-  if (isolation) {
+  if (ISOLATION.includes(ex.pattern)) {             // 単関節種目は少し軽く、休憩も短く
     sets = Math.max(2, Math.min(scheme.sets, 3));
     if (scheme.key === 'strength') { reps = '8〜10回'; rest = 75; }
     else if (scheme.key === 'hyper') { reps = '12〜15回'; rest = 60; }
     else rest = Math.min(rest, 60);
   }
-  return `${sets}セット × ${reps}（休憩${rest}秒）`;
+  return { fixed:'', sets, reps, rest };
 }
+
+function doseFor(ex, scheme) {
+  const p = prescription(ex, scheme);
+  return p.fixed || `${p.sets}セット × ${p.reps}（休憩${p.rest}秒）`;
+}
+
+function setsFor(ex, scheme) { return prescription(ex, scheme).sets; }
 
 /* おおよその所要時間（分） */
 function timeFor(ex, scheme) {
-  if (ex.dose) {                                   // 所要時間が固定の種目
+  if (ex.dose) {
     const m = /(\d+)\s*分/.exec(ex.dose);
     if (m) return parseInt(m[1], 10);
     return ['mobility', 'stretch', 'warmup'].includes(ex.pattern) ? 2 : 3;
   }
-  const isolation = ['arms_bi','arms_tri','shoulder_lat','rear_delt','accessory','core'].includes(ex.pattern);
-  const sets = isolation ? Math.max(2, Math.min(scheme.sets, 3)) : scheme.sets;
-  const rest = isolation ? Math.min(scheme.rest, 60) : scheme.rest;
-  return Math.round((sets * (40 + rest)) / 60);
+  const p = prescription(ex, scheme);
+  return Math.round((p.sets * (40 + p.rest)) / 60);
 }
 
 /* ------------------------------------------------------- 4. 種目を選ぶ */
@@ -368,141 +378,460 @@ function progressionNotes(program) {
   return notes;
 }
 
-/* --------------------------------------------------------- 8. 描画 */
+/* ==========================================================================
+   8. 描画
+   ========================================================================== */
 
-let CURRENT = null;
+let CURRENT = null;     // いま表示しているプラン
+let PLAN_KEY = '';      // チェック状態の保存キー
+let DONE = {};          // { dayIndex: [種目id, ...] }
+let activeDay = 0;
+let showAll = false;
 
-function itemHTML(item, scheme, dayIdx, blockIdx, itemIdx) {
+const ICON = {
+  copy:'<svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="2.4"/><path d="M15.5 5.5H5.8a2 2 0 0 0-2 2v9.7"/></svg>',
+  print:'<svg viewBox="0 0 24 24"><path d="M7 9.5V3.5h10v6M7 18.5H5a1.6 1.6 0 0 1-1.6-1.6v-4.8A1.6 1.6 0 0 1 5 10.5h14a1.6 1.6 0 0 1 1.6 1.6v4.8a1.6 1.6 0 0 1-1.6 1.6h-2"/><rect x="7" y="14.5" width="10" height="6" rx="1.2"/></svg>',
+  shuffle:'<svg viewBox="0 0 24 24"><path d="M3.5 6.5h3.8l9.4 11h3.8M3.5 17.5h3.8l3.1-3.6M17.2 6.5h3.5M16.8 3.8l3.7 2.7-3.7 2.7M16.8 14.8l3.7 2.7-3.7 2.7"/></svg>',
+  edit:'<svg viewBox="0 0 24 24"><path d="M4 20h4.2l9.6-9.6a2.1 2.1 0 0 0 0-3l-1.2-1.2a2.1 2.1 0 0 0-3 0L4 15.8Z"/></svg>',
+  clock:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.4V12l3 1.8"/></svg>',
+  swap:'<svg viewBox="0 0 24 24"><path d="M4.5 8.5h13M14.4 5.4l3.1 3.1-3.1 3.1M19.5 15.5h-13M9.6 12.4l-3.1 3.1 3.1 3.1"/></svg>',
+  check:'<svg viewBox="0 0 24 24"><path d="M5 12.6 9.7 17 19 7.6"/></svg>',
+  alert:'<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 4 2.8 19.5h18.4L12 4Z"/><path d="M12 10v4M12 16.6v.2"/></svg>',
+};
+
+/* ------------------------------------------------ 進捗（チェック）の保存 */
+
+function planKey(p) {
+  const src = p.splitName + '|' + p.days.map((d) =>
+    d.title + ':' + d.blocks.map((b) => b.items.map((i) => i.ex.id).join(',')).join(';')).join('|');
+  let h = 5381;
+  for (let i = 0; i < src.length; i++) h = ((h * 33) ^ src.charCodeAt(i)) >>> 0;
+  return 'plan-' + h.toString(36);
+}
+function loadProgress(key) {
+  try {
+    const raw = JSON.parse(localStorage.getItem('gym-menu-progress') || 'null');
+    return raw && raw.key === key ? raw.done : {};
+  } catch (e) { return {}; }
+}
+function saveProgress() {
+  try { localStorage.setItem('gym-menu-progress', JSON.stringify({ key:PLAN_KEY, done:DONE })); } catch (e) {}
+}
+const isDone = (d, id) => (DONE[d] || []).includes(id);
+
+/* ------------------------------------------------------------ 部品 */
+
+function dayItems(d) {
+  return CURRENT.days[d].blocks.reduce((a, b) => a.concat(b.items), []);
+}
+function dayCount(d) {
+  const all = dayItems(d);
+  return { done: all.filter((it) => isDone(d, it.ex.id)).length, total: all.length };
+}
+
+function itemHTML(item, scheme, d, b, i, num) {
   const ex = item.ex;
+  const p = prescription(ex, scheme);
   const why = (ex.goals || [])
     .filter((g) => (CURRENT.an.score[g] || 0) >= 2.5 && GOAL_LABEL[g])
     .slice(0, 3).map((g) => GOAL_LABEL[g]).join('・');
+  const done = isDone(d, ex.id);
+  const dose = p.fixed
+    ? `<span>${p.fixed}</span>`
+    : `<span>${p.sets}セット × ${p.reps}</span><span class="rest">休憩 ${p.rest}秒</span>`;
+
   return `
-    <li class="ex" data-d="${dayIdx}" data-b="${blockIdx}" data-i="${itemIdx}">
-      <div class="ex-main">
-        <div class="ex-name">${ex.name}</div>
-        <div class="ex-dose">${doseFor(ex, scheme)}</div>
-        ${ex.note ? `<div class="ex-note">${ex.note}</div>` : ''}
-        ${why ? `<div class="ex-why">狙い：${why}</div>` : ''}
+    <li class="ex${done ? ' done' : ''}" data-d="${d}" data-b="${b}" data-i="${i}">
+      <button class="check" type="button" data-act="check" aria-pressed="${done}"
+              aria-label="${ex.name} を完了にする">${ICON.check}</button>
+      <div class="ex-body">
+        <div class="ex-name">${num ? `<span class="idx">${num}</span>` : ''}${ex.name}</div>
+        <div class="ex-dose">${dose}</div>
+        ${ex.note ? `<p class="ex-note">${ex.note}</p>` : ''}
+        ${why ? `<div class="ex-why"><b>狙い</b> ${why}</div>` : ''}
       </div>
-      ${item.alts && item.alts.length > 1 ? `<button class="swap noprint" type="button" title="別の種目に差し替える">差し替え</button>` : ''}
+      <div class="ex-actions">
+        ${p.rest ? `<button class="ic" type="button" data-act="timer" data-sec="${p.rest}">${ICON.clock}${p.rest}秒</button>` : ''}
+        ${item.alts && item.alts.length > 1 ? `<button class="ic" type="button" data-act="swap">${ICON.swap}差し替え</button>` : ''}
+      </div>
     </li>`;
 }
 
-function render(program) {
+function blockHTML(block, scheme, d, b) {
+  let n = 0;
+  return `
+    <div class="block">
+      <div class="block-head"><h4>${block.title}</h4><span class="rule"></span></div>
+      <ul class="ex-list">
+        ${block.items.map((it, i) => itemHTML(it, scheme, d, b, i, block.ordered ? ++n : 0)).join('')}
+      </ul>
+      ${block.note ? `<p class="block-note">${block.note}</p>` : ''}
+    </div>`;
+}
+
+function dayPanelHTML(day, d) {
+  const c = dayCount(d);
+  return `
+    <section class="card day-panel" id="day-${d}" role="tabpanel" aria-labelledby="tab-${d}" ${d === 0 ? '' : 'hidden'}>
+      <div class="day-head">
+        <div>
+          <h3>${day.title}</h3>
+          <div class="day-sub">DAY ${d + 1}${day.day ? ` ・ ${day.day}曜が目安` : ''}</div>
+        </div>
+        <span class="meta">所要 約${day.est}分<br>${dayItems(d).length}種目</span>
+      </div>
+      <div class="progress" data-prog="${d}">
+        <div class="bar"><i style="width:${c.total ? (c.done / c.total) * 100 : 0}%"></i></div>
+        <div class="txt">
+          <span class="cnt">${c.done} / ${c.total} 完了</span>
+          <button type="button" data-act="reset" data-d="${d}">チェックをリセット</button>
+        </div>
+      </div>
+      ${day.blocks.filter((b) => b.items.length).map((b, bi) => blockHTML(b, CURRENT.scheme, d, bi)).join('')}
+    </section>`;
+}
+
+/* --------------------------------------------- 週の部位別セット数グラフ */
+
+function volumeData(program) {
+  const map = {};
+  program.days.forEach((day, di) => day.blocks.forEach((b) => {
+    if (b.title !== 'メイン') return;
+    b.items.forEach((it) => {
+      const mg = MUSCLE_BY_ID[it.ex.id] || MUSCLE_BY_PATTERN[it.ex.pattern];
+      if (!mg || mg === '有酸素') return;
+      if (!map[mg]) map[mg] = { sets:0, days:[] };
+      map[mg].sets += setsFor(it.ex, program.scheme);
+      if (!map[mg].days.includes(di + 1)) map[mg].days.push(di + 1);
+    });
+  }));
+  // 鍛えていない部位も0として出す（抜けが見えることに意味がある）
+  return MUSCLE_ORDER.filter((m) => m !== '有酸素')
+    .map((name) => ({ name, sets:(map[name] || { sets:0 }).sets, days:(map[name] || { days:[] }).days }))
+    .sort((a, b) => b.sets - a.sets || MUSCLE_ORDER.indexOf(a.name) - MUSCLE_ORDER.indexOf(b.name));
+}
+
+function chartHTML(program) {
+  const rows = volumeData(program);
+  if (!rows.length) return '';
+  const max = Math.max(1, ...rows.map((r) => r.sets));
+  const bars = rows.map((r, i) => `
+    <div class="bar-row${r.sets ? '' : ' zero'}"
+         title="${r.sets ? `${r.name}：週${r.sets}セット（DAY ${r.days.join('・')}）`
+                         : `${r.name}：このプランには入っていません`}">
+      <span class="bar-label">${r.name}</span>
+      <div class="bar-track">
+        ${r.sets ? `<div class="bar-fill" style="width:${Math.max((r.sets / max) * 100, 3)}%;animation-delay:${i * 45}ms"></div>` : ''}
+      </div>
+      <span class="bar-val">${r.sets}<span>セット</span></span>
+    </div>`).join('');
+
+  return `
+    <section class="card">
+      <div class="card-head" style="margin-bottom:14px">
+        <div>
+          <span class="eyebrow">Weekly volume</span>
+          <h2 style="margin-top:4px">週の部位別セット数</h2>
+          <p class="hint">メイン種目の合計。悩みに直結する部位に厚みが出ているか確認できます。</p>
+        </div>
+      </div>
+      <div class="chart">${bars}</div>
+      <p class="chart-foot">筋肉を増やす目的なら、1部位あたり週10〜20セットが目安です。少ない部位は「差し替え」や回数の追加で足せます。</p>
+    </section>`;
+}
+
+/* ------------------------------------------------------------ 全体描画 */
+
+function render(program, quiet) {
   CURRENT = program;
+  PLAN_KEY = planKey(program);
+  DONE = loadProgress(PLAN_KEY);
+  activeDay = 0; showAll = false;
+
   const { scheme, splitName, days, input, an } = program;
   const topGoals = an.ranked.filter((g) => GOAL_LABEL[g] && an.score[g] >= 2.5).slice(0, 6);
 
-  const summary = `
-    <section class="card summary-head">
-      <h2>あなた専用のトレーニングプラン</h2>
-      <p>${splitName}／週${input.freq}回・1回${input.mins}分・${ENV_LABEL[input.env]}</p>
-      <div class="tags">
-        ${topGoals.map((g) => `<span class="tag">${GOAL_LABEL[g]}</span>`).join('')}
-        ${Array.from(an.flags).map((f) => `<span class="tag alt">${GOAL_LABEL[f] || f}</span>`).join('')}
-      </div>
-      <div class="facts">
-        <dl class="fact"><dt>組み方</dt><dd>${scheme.label}</dd></dl>
-        <dl class="fact"><dt>基本セット</dt><dd>${scheme.sets}セット × ${scheme.reps}</dd></dl>
-        <dl class="fact"><dt>セット間の休憩</dt><dd>${scheme.rest}秒</dd></dl>
-      </div>
-      <p class="ex-note" style="margin-top:12px">${scheme.desc}</p>
-    </section>`;
+  const toolbar = `
+    <div class="toolbar">
+      <button class="btn btn-ghost" data-act="copy">${ICON.copy}テキストでコピー</button>
+      <button class="btn btn-ghost" data-act="print">${ICON.print}印刷 / PDF</button>
+      <button class="btn btn-ghost" data-act="again">${ICON.shuffle}別パターンで再生成</button>
+      <button class="btn btn-ghost" data-act="edit">${ICON.edit}条件を変える</button>
+    </div>`;
 
-  const readMsgs = an.matched.length
-    ? an.matched.slice(0, 5).map((r) => `<li><strong>${r.label}：</strong>${r.msg}</li>`).join('')
-    : `<li>具体的な悩みが読み取れなかったため、全身をバランスよく鍛える標準プランを組みました。気になる部位を入力すると、そこに寄せたメニューになります。</li>`;
+  const plan = `
+    <section class="plan">
+      <span class="eyebrow">Your plan</span>
+      <h2>${splitName}</h2>
+      <p class="plan-meta">週${input.freq}回 ・ 1回${input.mins}分 ・ ${ENV_LABEL[input.env]}</p>
+      <div class="tags">
+        ${topGoals.map((g) => `<span class="tag brand">${GOAL_LABEL[g]}</span>`).join('')}
+        ${Array.from(an.flags).map((f) => `<span class="tag line">${GOAL_LABEL[f] || f} に配慮</span>`).join('')}
+      </div>
+      <dl class="stats">
+        <div class="stat"><dt>組み方</dt><dd>${scheme.label}</dd></div>
+        <div class="stat"><dt>基本セット</dt><dd>${scheme.sets}セット × ${scheme.reps}</dd></div>
+        <div class="stat"><dt>セット間の休憩</dt><dd>${scheme.rest}秒</dd></div>
+      </dl>
+      <p class="scheme-desc">${scheme.desc}</p>
+    </section>`;
 
   const reading = `
     <section class="card">
-      <h2>あなたの悩みから読み取ったこと</h2>
-      <ul class="note-list">${readMsgs}</ul>
+      <div class="card-head" style="margin-bottom:14px">
+        <div><h2>悩みから読み取ったこと</h2></div>
+      </div>
+      <ul class="read-list">
+        ${an.matched.length
+          ? an.matched.slice(0, 5).map((r) => `<li><span class="k">${r.label}</span><span>${r.msg}</span></li>`).join('')
+          : `<li><span class="k">標準プラン</span><span>具体的な悩みが読み取れなかったため、全身をバランスよく鍛える内容にしました。気になる部位を書き足すと、そこに寄せたメニューになります。</span></li>`}
+      </ul>
     </section>`;
 
-  const dayCards = days.map((d, di) => `
-    <section class="card">
-      <div class="day-head">
-        <h3><span class="day-no">DAY ${di + 1}</span>${d.title}</h3>
-        <span class="meta">${d.day ? d.day + '曜 目安 / ' : ''}約${d.est}分</span>
-      </div>
-      ${d.blocks.filter((b) => b.items.length).map((b, bi) => `
-        <div class="block">
-          <h4>${b.title}</h4>
-          ${b.ordered ? '<ol class="ex-list">' : '<ul class="ex-list">'}
-            ${b.items.map((it, ii) => itemHTML(it, scheme, di, bi, ii)).join('')}
-          ${b.ordered ? '</ol>' : '</ul>'}
-          ${b.note ? `<div class="ex-why">${b.note}</div>` : ''}
-        </div>`).join('')}
-    </section>`).join('');
+  const nav = `
+    <div class="daynav" role="tablist" aria-label="トレーニング日">
+      ${days.map((d, i) => {
+        const c = dayCount(i);
+        return `<button role="tab" id="tab-${i}" type="button" data-act="day" data-d="${i}"
+                 aria-controls="day-${i}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">
+                 DAY ${i + 1}<span class="badge">${c.done}/${c.total}</span></button>`;
+      }).join('')}
+      <button type="button" data-act="all" class="all-toggle">全日まとめて表示</button>
+    </div>`;
 
-  const weekNote = `
+  const notes = `
     <section class="card">
-      <h2>続けるためのポイント</h2>
+      <div class="card-head" style="margin-bottom:14px"><div><h2>続けるためのポイント</h2></div></div>
       <ul class="note-list">${progressionNotes(program).map((n) => `<li>${n}</li>`).join('')}</ul>
       <div class="callout">
-        <strong>安全のために</strong>
+        <strong>${ICON.alert}安全のために</strong>
         ${an.cautions.map((c) => `<div>・${c}</div>`).join('')}
         <div>・痛みが出る動作は中止してください。「効いている感覚」と「関節の痛み」は別物です。</div>
         <div>・このプランは一般的な運動指導の範囲の情報です。持病・服薬・妊娠中・リハビリ中の方は医師の指示を優先してください。</div>
       </div>
     </section>`;
 
-  $('#result').innerHTML = `
-    <div class="actions noprint">
-      <button class="btn btn-ghost" id="btn-copy">テキストでコピー</button>
-      <button class="btn btn-ghost" id="btn-print">印刷 / PDF保存</button>
-      <button class="btn btn-ghost" id="btn-again">別パターンで再生成</button>
-      <button class="btn btn-ghost" id="btn-edit">条件を変える</button>
-    </div>
-    ${summary}${reading}${dayCards}${weekNote}`;
-  $('#result').hidden = false;
+  const el = $('#result');
+  el.innerHTML = toolbar + plan + reading + chartHTML(program) + nav +
+    days.map((d, i) => dayPanelHTML(d, i)).join('') + notes;
+  el.hidden = false;
 
-  bindActions();
-  $('#result').scrollIntoView({ behavior:'smooth', block:'start' });
+  $$('#result > *').forEach((node, i) => {
+    node.classList.add('reveal');
+    node.style.animationDelay = Math.min(i * 55, 330) + 'ms';
+  });
+
+  if (!quiet) {
+    requestAnimationFrame(() => {
+      const y = el.getBoundingClientRect().top + window.scrollY - 60;
+      window.scrollTo({ top:y, behavior:'smooth' });
+    });
+  }
 }
 
-/* 種目の差し替え（#result への委譲で1回だけ登録する） */
-function handleSwap(btn) {
-  const li = btn.closest('.ex');
+/* ------------------------------------------------------------ 操作 */
+
+function setDay(d) {
+  activeDay = d;
+  showAll = false;
+  $$('#result .day-panel').forEach((p, i) => { p.hidden = i !== d; });
+  $$('#result [data-act="day"]').forEach((b, i) => {
+    b.setAttribute('aria-selected', String(i === d));
+    b.tabIndex = i === d ? 0 : -1;
+  });
+  const t = $('.all-toggle');
+  if (t) t.classList.remove('on');
+  const nav = $('.daynav');
+  const panel = $('#day-' + d);
+  if (panel && nav) {
+    const y = panel.getBoundingClientRect().top + window.scrollY - nav.offsetHeight - 62;
+    if (window.scrollY > y) window.scrollTo({ top:y, behavior:'smooth' });
+  }
+}
+
+function bindDayKeys() {
+  $('#result').addEventListener('keydown', (e) => {
+    if (!e.target.matches('[data-act="day"]')) return;
+    const tabs = $$('#result [data-act="day"]');
+    const at = tabs.indexOf(e.target);
+    let to = -1;
+    if (e.key === 'ArrowRight') to = (at + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') to = (at - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') to = 0;
+    else if (e.key === 'End') to = tabs.length - 1;
+    if (to < 0) return;
+    e.preventDefault();
+    tabs[to].focus();
+    setDay(to);
+  });
+}
+
+function toggleAll() {
+  showAll = !showAll;
+  $$('#result .day-panel').forEach((p, i) => { p.hidden = showAll ? false : i !== activeDay; });
+  const t = $('.all-toggle');
+  t.textContent = showAll ? '1日ずつ表示' : '全日まとめて表示';
+  t.classList.toggle('on', showAll);
+}
+
+function refreshDay(d) {
+  const c = dayCount(d);
+  const prog = $(`[data-prog="${d}"]`);
+  if (prog) {
+    $('.bar i', prog).style.width = (c.total ? (c.done / c.total) * 100 : 0) + '%';
+    $('.cnt', prog).textContent = `${c.done} / ${c.total} 完了`;
+  }
+  const tab = $(`[data-act="day"][data-d="${d}"]`);
+  if (tab) {
+    $('.badge', tab).textContent = `${c.done}/${c.total}`;
+    tab.classList.toggle('done', c.done === c.total && c.total > 0);
+  }
+}
+
+function toggleCheck(li) {
+  const d = +li.dataset.d;
+  const id = CURRENT.days[d].blocks[+li.dataset.b].items[+li.dataset.i].ex.id;
+  const list = DONE[d] || (DONE[d] = []);
+  const at = list.indexOf(id);
+  if (at >= 0) list.splice(at, 1); else list.push(id);
+  const on = at < 0;
+  li.classList.toggle('done', on);
+  $('.check', li).setAttribute('aria-pressed', String(on));
+  saveProgress();
+  refreshDay(d);
+  const c = dayCount(d);
+  if (on && c.done === c.total) toast('DAY ' + (d + 1) + ' 完了。おつかれさまでした');
+}
+
+function handleSwap(li) {
   const d = +li.dataset.d, b = +li.dataset.b, i = +li.dataset.i;
   const item = CURRENT.days[d].blocks[b].items[i];
   const idx = item.alts.findIndex((e) => e.id === item.ex.id);
-  const usedToday = new Set(
-    CURRENT.days[d].blocks.flatMap((bl) => bl.items.map((it) => it.ex.id)));
-  const next = item.alts.find((e, k) => k > idx && !usedToday.has(e.id))
-    || item.alts.find((e) => e.id !== item.ex.id && !usedToday.has(e.id));
+  const used = new Set(dayItems(d).map((it) => it.ex.id));
+  const next = item.alts.find((e, k) => k > idx && !used.has(e.id))
+    || item.alts.find((e) => e.id !== item.ex.id && !used.has(e.id));
   if (!next) { toast('ほかに条件に合う種目がありません'); return; }
+
+  const wasDone = isDone(d, item.ex.id);
+  if (wasDone) toggleCheckState(d, item.ex.id, false);
   item.ex = next;
-  li.outerHTML = itemHTML(item, CURRENT.scheme, d, b, i);
-  toast('種目を差し替えました');
+  const num = li.querySelector('.idx') ? li.querySelector('.idx').textContent : 0;
+  li.outerHTML = itemHTML(item, CURRENT.scheme, d, b, i, num);
+  PLAN_KEY = planKey(CURRENT);
+  saveProgress();
+  savePlan(readInput());
+  refreshDay(d);
+  toast('「' + next.name + '」に差し替えました');
+}
+function toggleCheckState(d, id, on) {
+  const list = DONE[d] || (DONE[d] = []);
+  const at = list.indexOf(id);
+  if (on && at < 0) list.push(id);
+  if (!on && at >= 0) list.splice(at, 1);
 }
 
-/* 結果カード上のボタン（描画のたびに要素ごと差し替わるので重複登録にならない） */
-function bindActions() {
-  $('#btn-print').addEventListener('click', () => window.print());
-  $('#btn-again').addEventListener('click', () => {
-    rand = mulberry32(Math.floor(Math.random() * 1e9));
-    generate();
-  });
-  $('#btn-edit').addEventListener('click', () => {
-    $('#form-card').scrollIntoView({ behavior:'smooth', block:'start' });
-  });
-  $('#btn-copy').addEventListener('click', async () => {
+/* ------------------------------------------------------------ タイマー */
+
+const RestTimer = {
+  raf:null, endAt:0, total:0, name:'',
+  el:null, num:null, arc:null, C: 2 * Math.PI * 16.2,
+
+  init() {
+    this.el = $('#timer'); this.num = $('#timer-num'); this.arc = $('#timer-arc');
+    this.arc.style.strokeDasharray = this.C;
+    $('#timer-stop').addEventListener('click', () => this.stop());
+    $('#timer-add').addEventListener('click', () => { this.endAt += 15000; this.tick(); });
+  },
+  start(sec, name) {
+    this.total = sec * 1000; this.endAt = Date.now() + this.total; this.name = name;
+    $('#timer-name').textContent = '休憩 ' + sec + '秒';
+    $('#timer-next').textContent = name;
+    this.el.classList.add('show');
+    cancelAnimationFrame(this.raf);
+    this.loop();
+  },
+  loop() {
+    this.tick();
+    if (Date.now() < this.endAt) this.raf = requestAnimationFrame(() => this.loop());
+    else this.finish();
+  },
+  tick() {
+    const left = Math.max(0, this.endAt - Date.now());
+    this.num.textContent = Math.ceil(left / 1000);
+    const ratio = this.total ? left / this.total : 0;
+    this.arc.style.strokeDashoffset = this.C * (1 - Math.min(ratio, 1));
+  },
+  finish() {
+    this.num.textContent = '0';
+    this.arc.style.strokeDashoffset = this.C;
+    if (navigator.vibrate) { try { navigator.vibrate([120, 70, 120]); } catch (e) {} }
+    this.beep();
+    toast('休憩終了。次のセットへ');
+    setTimeout(() => this.el.classList.remove('show'), 1400);
+  },
+  stop() { cancelAnimationFrame(this.raf); this.el.classList.remove('show'); },
+  beep() {
     try {
-      await navigator.clipboard.writeText(toPlainText(CURRENT));
-      toast('コピーしました');
-    } catch (e) { toast('コピーできませんでした'); }
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      [0, 0.18].forEach((t) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.13);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.15);
+      });
+      setTimeout(() => ctx.close(), 800);
+    } catch (e) {}
+  },
+};
+
+/* ------------------------------------------------------- 結果のイベント */
+
+function bindResult() {
+  $('#result').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    const li = btn.closest('.ex');
+
+    if (act === 'check') toggleCheck(li);
+    else if (act === 'swap') handleSwap(li);
+    else if (act === 'timer') {
+      const name = $('.ex-name', li).textContent.replace(/^\d+/, '').trim();
+      RestTimer.start(+btn.dataset.sec, name);
+    }
+    else if (act === 'day') setDay(+btn.dataset.d);
+    else if (act === 'all') toggleAll();
+    else if (act === 'reset') {
+      const d = +btn.dataset.d;
+      DONE[d] = []; saveProgress();
+      $$(`#day-${d} .ex`).forEach((row) => {
+        row.classList.remove('done');
+        $('.check', row).setAttribute('aria-pressed', 'false');
+      });
+      refreshDay(d);
+      toast('チェックをリセットしました');
+    }
+    else if (act === 'print') { const w = showAll; if (!w) toggleAll(); setTimeout(() => window.print(), 60); }
+    else if (act === 'again') { SEED = Math.floor(Math.random() * 1e9); generate(); }
+    else if (act === 'edit') $('#form-card').scrollIntoView({ behavior:'smooth', block:'start' });
+    else if (act === 'copy') {
+      navigator.clipboard.writeText(toPlainText(CURRENT))
+        .then(() => toast('コピーしました'))
+        .catch(() => toast('コピーできませんでした'));
+    }
   });
 }
 
 function toPlainText(program) {
   const { scheme, splitName, days, input } = program;
-  const L = [];
-  L.push('■ あなた専用のトレーニングプラン');
-  L.push(`${splitName}／週${input.freq}回・1回${input.mins}分・${ENV_LABEL[input.env]}`);
-  L.push(`組み方：${scheme.label}（基本 ${scheme.sets}セット × ${scheme.reps}／休憩${scheme.rest}秒）`);
-  L.push('');
+  const L = ['■ あなた専用のトレーニングプラン',
+    `${splitName}／週${input.freq}回・1回${input.mins}分・${ENV_LABEL[input.env]}`,
+    `組み方：${scheme.label}（基本 ${scheme.sets}セット × ${scheme.reps}／休憩${scheme.rest}秒）`, ''];
   days.forEach((d, i) => {
     L.push(`--- DAY ${i + 1}　${d.title}（約${d.est}分）---`);
     d.blocks.filter((b) => b.items.length).forEach((b) => {
@@ -520,42 +849,107 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+  toast._t = setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-/* --------------------------------------------------------- 9. 起動 */
+/* ==========================================================================
+   9. フォーム側のふるまい
+   ========================================================================== */
 
-function generate() {
+function generate(quiet) {
+  rand = mulberry32(SEED);                 // 同じシードからは必ず同じプランになる
   const input = readInput();
-  const an = analyze(input);
-  render(buildProgram(input, an));
-  try { localStorage.setItem('gym-menu-input', JSON.stringify(input)); } catch (e) {}
+  const program = buildProgram(input, analyze(input));
+  render(program, quiet);
+  savePlan(input);
+  return program;
 }
 
-function restore() {
-  let saved;
-  try { saved = JSON.parse(localStorage.getItem('gym-menu-input') || 'null'); } catch (e) { return; }
-  if (!saved) return;
-  $('#concern').value = saved.text || '';
-  const setRadio = (name, v) => {
-    const el = $(`input[name="${name}"][value="${v}"]`);
-    if (el) { el.checked = true; }
-  };
-  setRadio('level', saved.level); setRadio('freq', saved.freq);
-  setRadio('mins', saved.mins);   setRadio('env', saved.env);
-  (saved.chips || []).forEach((v) => { const el = $(`input[name="preset"][value="${v}"]`); if (el) el.checked = true; });
-  (saved.pains || []).forEach((v) => { const el = $(`input[name="pain"][value="${v}"]`); if (el) el.checked = true; });
-  syncToggles();
+/* 作ったプランをそのまま保存する（リロードしても同じプランが開く） */
+function savePlan(input) {
+  const picks = CURRENT.days.map((d) => d.blocks.map((b) => b.items.map((i) => i.ex.id)));
+  try {
+    localStorage.setItem('gym-menu-input', JSON.stringify(input));
+    localStorage.setItem('gym-menu-plan', JSON.stringify({ seed:SEED, input, picks }));
+  } catch (e) {}
 }
 
-// チップ／セグメントの見た目を状態に同期
+/* 保存しておいた差し替え結果を、組み直したプランに戻す */
+function applyPicks(program, picks) {
+  if (!Array.isArray(picks) || picks.length !== program.days.length) return false;
+  const byId = {};
+  EX_DB.forEach((e) => { byId[e.id] = e; });
+  return program.days.every((day, d) =>
+    Array.isArray(picks[d]) && picks[d].length === day.blocks.length &&
+    day.blocks.every((b, bi) =>
+      Array.isArray(picks[d][bi]) && picks[d][bi].length === b.items.length &&
+      b.items.every((it, i) => {
+        const ex = byId[picks[d][bi][i]];
+        if (ex) it.ex = ex;
+        return true;
+      })));
+}
+
 function syncToggles() {
   $$('.chip').forEach((l) => l.classList.toggle('on', $('input', l).checked));
   $$('.seg label').forEach((l) => l.classList.toggle('on', $('input', l).checked));
 }
 
+function updateMeta() {
+  const i = readInput();
+  $('#cta-meta').innerHTML =
+    `<i>週${i.freq}回</i>・<i>1回${i.mins}分</i>・<i>${ENV_LABEL[i.env]}</i>` +
+    (i.pains.length ? `・<i>${i.pains.map((p) => GOAL_LABEL[p].replace('にやさしく', '')).join('/')}に配慮</i>` : '');
+}
+
+function updateDetect() {
+  const input = readInput();
+  $('#counter').textContent = input.text.length + '字';
+  const box = $('#detect');
+  const an = analyze(input);
+  const shown = input.text || input.chips.length || input.pains.length ? an.matched : [];
+  box.innerHTML = '<span class="dt">読み取った目的</span>' + (
+    shown.length
+      ? shown.slice(0, 7).map((r) => `<span class="tag brand">${r.label}</span>`).join('') +
+        Array.from(an.flags).map((f) => `<span class="tag line">${GOAL_LABEL[f] || f} に配慮</span>`).join('')
+      : '<span class="empty">入力するとここに表示されます</span>');
+}
+
+function restorePlan() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('gym-menu-plan') || 'null'); } catch (e) { return; }
+  if (!saved || typeof saved.seed !== 'number' || !saved.input) return;
+  SEED = saved.seed;
+  const program = buildProgram(saved.input, analyze(saved.input));
+  applyPicks(program, saved.picks);
+  render(program, true);
+}
+
+function restoreForm() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('gym-menu-input') || 'null'); } catch (e) { return; }
+  if (!saved) return;
+  $('#concern').value = saved.text || '';
+  const setRadio = (n, v) => { const el = $(`input[name="${n}"][value="${v}"]`); if (el) el.checked = true; };
+  setRadio('level', saved.level); setRadio('freq', saved.freq);
+  setRadio('mins', saved.mins);   setRadio('env', saved.env);
+  (saved.chips || []).forEach((v) => { const el = $(`input[name="preset"][value="${v}"]`); if (el) el.checked = true; });
+  (saved.pains || []).forEach((v) => { const el = $(`input[name="pain"][value="${v}"]`); if (el) el.checked = true; });
+}
+
+/* テーマ切り替え */
+function applyTheme(mode) {
+  document.documentElement.setAttribute('data-theme', mode);
+  $$('[data-theme-set]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeSet === mode)));
+  try { localStorage.setItem('gym-menu-theme', mode); } catch (e) {}
+}
+
+/* ==========================================================================
+   10. 起動
+   ========================================================================== */
+
 document.addEventListener('DOMContentLoaded', () => {
-  // プリセットの悩みチップを生成
+  // 悩みチップを生成
   const wanted = ['fatloss','belly','bulk','posture','stiffness','endurance','glutes',
                   'flabbyarm','looks','stress','beginner','health','strength','legs'];
   const box = $('#preset-chips');
@@ -568,18 +962,48 @@ document.addEventListener('DOMContentLoaded', () => {
     box.appendChild(label);
   });
 
+  // テーマ
+  let theme = 'auto';
+  try { theme = localStorage.getItem('gym-menu-theme') || 'auto'; } catch (e) {}
+  applyTheme(theme);
+  $$('[data-theme-set]').forEach((b) =>
+    b.addEventListener('click', () => applyTheme(b.dataset.themeSet)));
+
+  // 入力の変化を拾う
+  let t = null, ctaT = null;
+  const onInput = () => {
+    clearTimeout(t); t = setTimeout(() => { updateDetect(); updateMeta(); }, 120);
+    const cta = $('.cta');                 // 入力中だけボタンを下げ、読み取り結果を見せる
+    cta.classList.add('away');
+    clearTimeout(ctaT);
+    ctaT = setTimeout(() => cta.classList.remove('away'), 1100);
+  };
+  $('#concern').addEventListener('input', onInput);
   document.addEventListener('change', (e) => {
-    if (e.target.matches('.chip input, .seg input')) syncToggles();
+    if (e.target.matches('.chip input, .seg input')) { syncToggles(); updateDetect(); updateMeta(); }
   });
 
-  $('#result').addEventListener('click', (e) => {
-    const btn = e.target.closest('.swap');
-    if (btn) handleSwap(btn);
-  });
+  $$('.sample').forEach((b) => b.addEventListener('click', () => {
+    const ta = $('#concern');
+    ta.value = ta.value.trim() ? ta.value.trim() + '。' + b.textContent : b.textContent;
+    ta.focus();
+    updateDetect(); updateMeta();
+  }));
 
-  $('#gen').addEventListener('click', (e) => { e.preventDefault(); generate(); });
   $('#form').addEventListener('submit', (e) => { e.preventDefault(); generate(); });
 
-  restore();
+  // 上部バーの境界線
+  const bar = $('#topbar');
+  const onScroll = () => bar.classList.toggle('stuck', window.scrollY > 8);
+  window.addEventListener('scroll', onScroll, { passive:true });
+  onScroll();
+
+  RestTimer.init();
+  bindResult();
+  bindDayKeys();
+  restoreForm();
   syncToggles();
+  updateDetect();
+  updateMeta();
+  restorePlan();
 });
